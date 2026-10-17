@@ -8,8 +8,10 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
-  <!-- Socket.io -->
-  <script src="/socket.io/socket.io.js"></script>
+  <!-- QRCode.js (Garante geração instantânea no navegador) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <!-- Socket.io CDN (Funciona tanto localmente quanto na nuvem) -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <!-- Som e Estilos -->
   <link rel="stylesheet" href="/css/style.css">
   <script src="/sound.js"></script>
@@ -26,7 +28,7 @@
         <h1 class="font-bold text-lg tracking-wide flex items-center gap-2">
           Mesa de Poker <span id="roomBadge" class="bg-amber-500/20 text-amber-300 text-xs px-2.5 py-0.5 rounded-full font-mono border border-amber-500/30">MESA-1</span>
         </h1>
-        <p class="text-xs text-slate-400">Blinds: <span id="blindsText" class="text-amber-400 font-semibold">1 / 2</span> • Fichas Iniciais: <span id="startingChipsText">100</span></p>
+        <p class="text-xs text-slate-400">Blinds: <span id="blindsText" class="text-amber-400 font-semibold">1 / 2</span> • Fichas: <span id="startingChipsText">100</span></p>
       </div>
     </div>
 
@@ -96,14 +98,15 @@
           <!-- Jogadores gerados dinamicamente via JS -->
         </div>
 
-        <!-- Aviso se houver menos de 2 jogadores -->
-        <div id="waitingPlayersAlert" class="z-10 mt-6 bg-slate-900/90 border border-slate-700/80 px-6 py-4 rounded-2xl text-center shadow-xl flex flex-col items-center gap-3">
-          <p class="text-slate-300 text-sm">
-            Aguardando amigos entrarem pelo celular... (Mínimo 2 jogadores)
-          </p>
-          <button onclick="toggleQrModal()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-sm px-5 py-2 rounded-xl flex items-center gap-2 shadow-lg">
-            <i data-lucide="smartphone" class="w-4 h-4"></i> Conectar Celulares com QR Code
-          </button>
+        <!-- QR Code Gigante no Centro da Mesa (Quando aguardando jogadores) -->
+        <div id="waitingPlayersAlert" class="z-10 mt-4 bg-slate-900/95 border border-amber-500/50 p-4 rounded-3xl text-center shadow-2xl flex flex-col items-center gap-2 max-w-sm">
+          <div id="tableQrCode" class="bg-white p-2.5 rounded-2xl shadow-inner flex items-center justify-center min-w-[140px] min-h-[140px]">
+            <!-- QR Code desenhado pelo JS -->
+          </div>
+          <div class="text-center">
+            <p class="text-white font-extrabold text-sm">Aponte a câmera para entrar</p>
+            <p id="tableUrlText" class="text-amber-400 font-mono text-[11px] font-bold mt-0.5 truncate max-w-[240px]">fichas-de-poker.vercel.app</p>
+          </div>
         </div>
 
       </div>
@@ -124,12 +127,12 @@
       </div>
 
       <!-- Mini QR Code no canto do Feed -->
-      <div class="bg-slate-950/70 p-3 rounded-xl border border-slate-800 flex items-center gap-3">
-        <img id="sideQrCode" src="" alt="QR Code" class="w-16 h-16 rounded bg-white p-1">
+      <div class="bg-slate-950/70 p-3 rounded-xl border border-slate-800 flex items-center gap-3 cursor-pointer" onclick="toggleQrModal()">
+        <div id="sideQrCode" class="w-16 h-16 rounded bg-white p-1 flex items-center justify-center"></div>
         <div class="text-[11px] leading-tight">
           <p class="font-bold text-slate-200">Entre na mesa:</p>
-          <p id="sideIpText" class="text-amber-400 font-mono mt-0.5 truncate">Carregando...</p>
-          <p class="text-slate-400 mt-1">Abra a câmera do celular</p>
+          <p id="sideIpText" class="text-amber-400 font-mono mt-0.5 truncate max-w-[140px]">...</p>
+          <p class="text-slate-400 mt-1">Toque para ampliar</p>
         </div>
       </div>
     </aside>
@@ -147,7 +150,7 @@
         <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Cancelar Mão
       </button>
       <span class="text-slate-600">|</span>
-      <span>Conexão: <span id="connectionStatus" class="text-emerald-400 font-semibold">Conectado</span></span>
+      <span>Conexão: <span id="connectionStatus" class="text-emerald-400 font-semibold">Conectando...</span></span>
     </div>
   </footer>
 
@@ -162,7 +165,7 @@
       <p class="text-slate-400 text-sm mb-6">Aponte a câmera do celular para entrar na mesa sem precisar de login!</p>
 
       <div class="bg-white p-4 rounded-2xl inline-block shadow-2xl border-4 border-amber-500/50 mb-6">
-        <img id="modalQrCode" src="" alt="QR Code" class="w-64 h-64 mx-auto">
+        <div id="modalQrCode" class="w-64 h-64 flex items-center justify-center mx-auto"></div>
       </div>
 
       <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 text-sm">
@@ -189,6 +192,35 @@
         <button onclick="confirmShowdownWinners()" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-base py-3 rounded-xl shadow-lg shadow-amber-500/30 transition">
           Confirmar Vencedor(es)
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Ranking e Estatísticas do Banco -->
+  <div id="leaderboardModal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center z-50 hidden">
+    <div class="bg-slate-900 border border-slate-700 rounded-3xl p-6 max-w-md w-full shadow-2xl">
+      <div class="flex justify-between items-center mb-4">
+        <div class="flex items-center gap-2">
+          <i data-lucide="trophy" class="w-6 h-6 text-amber-400"></i>
+          <h3 class="font-bold text-lg text-white">Ranking & Histórico da Mesa</h3>
+        </div>
+        <button onclick="toggleLeaderboardModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Classificação de Fichas:</h4>
+          <div id="rankingList" class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+            <p class="text-xs text-slate-500">Carregando dados do banco...</p>
+          </div>
+        </div>
+
+        <div class="pt-2 border-t border-slate-800">
+          <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Últimas Mãos Vencidas:</h4>
+          <div id="recentHandsList" class="space-y-1.5 max-h-40 overflow-y-auto pr-1 text-xs text-slate-300">
+            <p class="text-xs text-slate-500">Nenhuma mão salva ainda.</p>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -222,73 +254,90 @@
     </div>
   </div>
 
-  <!-- MODAL: Ranking e Estatísticas do Banco -->
-  <div id="leaderboardModal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center z-50 hidden">
-    <div class="bg-slate-900 border border-slate-700 rounded-3xl p-6 max-w-md w-full shadow-2xl">
-      <div class="flex justify-between items-center mb-4">
-        <div class="flex items-center gap-2">
-          <i data-lucide="trophy" class="w-6 h-6 text-amber-400"></i>
-          <h3 class="font-bold text-lg text-white">Ranking & Histórico da Mesa</h3>
-        </div>
-        <button onclick="toggleLeaderboardModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
-      </div>
-
-      <div class="space-y-4">
-        <div>
-          <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Classificação de Fichas:</h4>
-          <div id="rankingList" class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-            <p class="text-xs text-slate-500">Carregando dados do banco...</p>
-          </div>
-        </div>
-
-        <div class="pt-2 border-t border-slate-800">
-          <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Últimas Mãos Vencidas:</h4>
-          <div id="recentHandsList" class="space-y-1.5 max-h-40 overflow-y-auto pr-1 text-xs text-slate-300">
-            <p class="text-xs text-slate-500">Nenhuma mão salva ainda.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- Script da Lógica da TV -->
   <script>
-    const socket = io();
     const urlParams = new URLSearchParams(window.location.search);
     const roomId = (urlParams.get('room') || 'MESA-1').toUpperCase();
-
-    let currentGameState = null;
-
-    // Atualiza nome da sala
     document.getElementById('roomBadge').innerText = roomId;
 
-    // Buscar informações de rede e QR Code do servidor
-    async function loadNetworkInfo() {
+    // Constrói URL direta do cliente para o QR Code imediato
+    const currentHost = window.location.host;
+    const clientUrl = `${window.location.protocol}//${currentHost}/play.html?room=${roomId}`;
+    document.getElementById('modalUrlText').innerText = clientUrl;
+    document.getElementById('tableUrlText').innerText = currentHost;
+    document.getElementById('sideIpText').innerText = currentHost;
+
+    // Gerar QR Codes Instantaneamente no Navegador
+    function generateQrCodes(url) {
+      if (typeof QRCode === 'undefined') return;
+
+      const tableQr = document.getElementById('tableQrCode');
+      tableQr.innerHTML = '';
+      new QRCode(tableQr, { text: url, width: 140, height: 140, colorDark: "#0f172a", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
+
+      const sideQr = document.getElementById('sideQrCode');
+      sideQr.innerHTML = '';
+      new QRCode(sideQr, { text: url, width: 64, height: 64, colorDark: "#0f172a", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.L });
+
+      const modalQr = document.getElementById('modalQrCode');
+      modalQr.innerHTML = '';
+      new QRCode(modalQr, { text: url, width: 256, height: 256, colorDark: "#0f172a", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.H });
+    }
+    generateQrCodes(clientUrl);
+
+    // Sistema Híbrido: Socket.IO + Polling Fallback para Nuvem/Vercel
+    let socket = null;
+    let isSocketConnected = false;
+
+    if (typeof io !== 'undefined') {
       try {
-        const res = await fetch(`/api/info?room=${roomId}`);
-        const data = await res.json();
-        document.getElementById('modalQrCode').src = data.qrCode;
-        document.getElementById('sideQrCode').src = data.qrCode;
-        document.getElementById('modalUrlText').innerText = data.clientUrl;
-        document.getElementById('sideIpText').innerText = data.clientUrl.replace('http://', '');
+        socket = io({ transports: ['websocket', 'polling'], timeout: 4000 });
+        socket.on('connect', () => {
+          isSocketConnected = true;
+          document.getElementById('connectionStatus').innerText = 'Online (Realtime 🟢)';
+          document.getElementById('connectionStatus').className = 'text-emerald-400 font-semibold';
+          socket.emit('joinRoom', { roomId, isTv: true });
+        });
+
+        socket.on('gameState', (state) => {
+          renderTable(state);
+        });
+
+        socket.on('disconnect', () => {
+          isSocketConnected = false;
+          document.getElementById('connectionStatus').innerText = 'Sincronizando Nuvem 🟡';
+          document.getElementById('connectionStatus').className = 'text-amber-400 font-semibold';
+        });
       } catch (e) {
-        console.error('Erro ao carregar rede:', e);
+        console.warn('Socket indisponível, usando modo REST:', e);
       }
     }
-    loadNetworkInfo();
 
-    // Conectar à sala como TV
-    socket.emit('joinRoom', { roomId, isTv: true });
-
-    // Escutar atualizações de estado do jogo
-    socket.on('gameState', (state) => {
-      currentGameState = state;
-      renderTable(state);
-    });
+    // Polling contínuo (Garante que funcione mesmo na Vercel Serverless)
+    async function syncStateFromApi() {
+      try {
+        const res = await fetch(`/api/state?room=${roomId}`);
+        if (res.ok) {
+          const state = await res.json();
+          renderTable(state);
+          if (!isSocketConnected) {
+            document.getElementById('connectionStatus').innerText = 'Online (Nuvem 🟢)';
+            document.getElementById('connectionStatus').className = 'text-emerald-400 font-semibold';
+          }
+        }
+      } catch (err) {
+        // Falha silenciosa
+      }
+    }
+    syncStateFromApi();
+    setInterval(syncStateFromApi, 1000);
 
     // Renderizar a Mesa e Jogadores
     function renderTable(state) {
+      if (!state) return;
+
       document.getElementById('blindsText').innerText = `${state.smallBlind} / ${state.bigBlind}`;
+      document.getElementById('startingChipsText').innerText = state.startingChips || 100;
       document.getElementById('handCountBadge').innerText = `Mão #${state.handNumber}`;
       document.getElementById('potTotal').innerText = state.pot;
 
@@ -320,9 +369,9 @@
       // Atualizar Log de Ações
       renderActionLog(state.actionLog);
 
-      // Aviso de jogadores insuficientes
+      // Aviso / QR Code central de jogadores insuficientes
       const waitingAlert = document.getElementById('waitingPlayersAlert');
-      if (state.players.length < 2) {
+      if (state.players.length < 2 || state.state === 'LOBBY') {
         waitingAlert.classList.remove('hidden');
       } else {
         waitingAlert.classList.add('hidden');
@@ -341,7 +390,7 @@
         winnerBanner.classList.add('scale-0');
       }
 
-      // Se entrou em Showdown, abre modal para o host/jogadores marcarem quem ganhou
+      // Se entrou em Showdown, abre modal para o host marcar quem ganhou
       if (state.state === 'SHOWDOWN') {
         openShowdownModal(state.players.filter(p => !p.folded));
       } else {
@@ -349,22 +398,20 @@
       }
     }
 
-    // Calcula posições em elipse (oval) perfeita ao redor da mesa
+    // Calcula posições em elipse ao redor da mesa
     function renderPlayersAroundTable(players) {
       const container = document.getElementById('playersContainer');
       container.innerHTML = '';
 
-      if (players.length === 0) return;
+      if (!players || players.length === 0) return;
 
       const total = players.length;
-      // Dimensões do anel de jogadores
-      const rx = 44; // raio percentual horizontal
-      const ry = 42; // raio percentual vertical
-      const cx = 50; // centro x
-      const cy = 50; // centro y
+      const rx = 44;
+      const ry = 42;
+      const cx = 50;
+      const cy = 50;
 
       players.forEach((p, index) => {
-        // Ângulo distribuído
         const angle = (index / total) * 2 * Math.PI + Math.PI / 2;
         const left = cx + rx * Math.cos(angle);
         const top = cy + ry * Math.sin(angle);
@@ -374,7 +421,6 @@
         seat.style.left = `${left}%`;
         seat.style.top = `${top}%`;
 
-        // Badges: Dealer, SB, BB
         let badgeHtml = '';
         if (p.isDealer) badgeHtml = `<span class="badge-dealer text-[10px] w-5 h-5 rounded-full flex items-center justify-center absolute -top-1 -right-1 z-10">D</span>`;
         else if (p.isSmallBlind) badgeHtml = `<span class="badge-sb text-[9px] w-5 h-5 rounded-full flex items-center justify-center absolute -top-1 -right-1 z-10">SB</span>`;
@@ -397,7 +443,6 @@
             </div>
           </div>
 
-          <!-- Aposta atual do jogador à frente dele -->
           ${p.currentBet > 0 ? `
             <div class="mt-1 bg-amber-500 text-slate-950 text-xs font-black px-2 py-0.5 rounded-full shadow-lg flex items-center gap-1 animate-bounce">
               <span>+${p.currentBet}</span>
@@ -423,19 +468,34 @@
       `).join('');
     }
 
-    // Ações do Host
+    // Ações do Host (Dispara via Socket e via REST)
     function startHand() {
       SoundEffects.playChip();
-      socket.emit('startHand', { roomId });
+      if (socket && isSocketConnected) socket.emit('startHand', { roomId });
+      fetch('/api/start-hand', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId })
+      }).then(res => res.json()).then(data => { if (data.state) renderTable(data.state); });
     }
 
     function forceAdvance() {
-      socket.emit('forceAdvance', { roomId });
+      if (socket && isSocketConnected) socket.emit('forceAdvance', { roomId });
+      fetch('/api/advance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId })
+      }).then(res => res.json()).then(data => { if (data.state) renderTable(data.state); });
     }
 
     function resetHand() {
-      if (confirm('Deseja realmente cancelar esta mão e devolver as fichas aos jogadores?')) {
-        socket.emit('resetHand', { roomId });
+      if (confirm('Deseja cancelar esta mão e devolver as fichas aos jogadores?')) {
+        if (socket && isSocketConnected) socket.emit('resetHand', { roomId });
+        fetch('/api/reset-hand', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roomId })
+        }).then(syncStateFromApi);
       }
     }
 
@@ -462,7 +522,12 @@
         alert('Por favor, selecione quem ganhou a mão física.');
         return;
       }
-      socket.emit('resolveShowdown', { roomId, winnerIds: selected });
+      if (socket && isSocketConnected) socket.emit('resolveShowdown', { roomId, winnerIds: selected });
+      fetch('/api/showdown', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId, winnerIds: selected })
+      }).then(res => res.json()).then(data => { if (data.state) renderTable(data.state); });
       closeShowdownModal();
     }
 
@@ -519,14 +584,15 @@
       const bb = Number(document.getElementById('inputBb').value);
       const starting = Number(document.getElementById('inputStartingChips').value);
 
-      socket.emit('updateSettings', {
-        roomId,
-        settings: { smallBlind: sb, bigBlind: bb, startingChips: starting }
-      });
+      if (socket && isSocketConnected) {
+        socket.emit('updateSettings', {
+          roomId,
+          settings: { smallBlind: sb, bigBlind: bb, startingChips: starting }
+        });
+      }
       toggleSettingsModal();
     }
 
-    // Inicializar ícones Lucide
     lucide.createIcons();
   </script>
 </body>

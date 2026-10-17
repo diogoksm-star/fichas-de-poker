@@ -8,8 +8,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
-  <!-- Socket.io -->
-  <script src="/socket.io/socket.io.js"></script>
+  <!-- Socket.io CDN -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <!-- Som e Estilos -->
   <link rel="stylesheet" href="/css/style.css">
   <script src="/sound.js"></script>
@@ -158,7 +158,6 @@
   </div>
 
   <script>
-    const socket = io();
     const urlParams = new URLSearchParams(window.location.search);
     const initialRoom = (urlParams.get('room') || 'MESA-1').toUpperCase();
 
@@ -171,6 +170,57 @@
     // Configura sala no input
     document.getElementById('inputRoomId').value = currentRoomId;
 
+    let socket = null;
+    let isSocketConnected = false;
+
+    if (typeof io !== 'undefined') {
+      try {
+        socket = io({ transports: ['websocket', 'polling'], timeout: 4000 });
+        socket.on('connect', () => {
+          isSocketConnected = true;
+          document.getElementById('playerConnectionText').innerText = `Online (${currentRoomId} 🟢)`;
+          if (myPlayerName && myPlayerId) {
+            socket.emit('joinRoom', { roomId: currentRoomId, name: myPlayerName, playerId: myPlayerId });
+          }
+        });
+
+        socket.on('playerJoined', (data) => {
+          myPlayerId = data.playerId;
+          localStorage.setItem('poker_player_id', myPlayerId);
+          updatePlayerInfo(data.player);
+        });
+
+        socket.on('gameState', (state) => {
+          currentGameState = state;
+          renderMobileState(state);
+        });
+
+        socket.on('disconnect', () => {
+          isSocketConnected = false;
+          document.getElementById('playerConnectionText').innerText = `Sincronizando Nuvem 🟡`;
+        });
+      } catch (e) {
+        console.warn('Socket indisponível:', e);
+      }
+    }
+
+    // Polling contínuo para Nuvem/Vercel
+    async function syncMobileState() {
+      if (!currentRoomId || !myPlayerId) return;
+      try {
+        const res = await fetch(`/api/state?room=${currentRoomId}`);
+        if (res.ok) {
+          const state = await res.json();
+          currentGameState = state;
+          renderMobileState(state);
+          if (!isSocketConnected) {
+            document.getElementById('playerConnectionText').innerText = `Online (${currentRoomId} 🟢)`;
+          }
+        }
+      } catch (e) {}
+    }
+    setInterval(syncMobileState, 1000);
+
     if (myPlayerName && myPlayerId) {
       document.getElementById('inputPlayerName').value = myPlayerName;
       autoJoin();
@@ -178,10 +228,18 @@
 
     function autoJoin() {
       document.getElementById('joinScreen').classList.add('hidden');
-      socket.emit('joinRoom', {
-        roomId: currentRoomId,
-        name: myPlayerName,
-        playerId: myPlayerId
+      if (socket && isSocketConnected) {
+        socket.emit('joinRoom', { roomId: currentRoomId, name: myPlayerName, playerId: myPlayerId });
+      }
+      fetch('/api/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId: currentRoomId, name: myPlayerName, playerId: myPlayerId })
+      }).then(res => res.json()).then(data => {
+        if (data.state) {
+          currentGameState = data.state;
+          renderMobileState(data.state);
+        }
       });
     }
 
@@ -201,23 +259,22 @@
       localStorage.setItem('poker_player_name', myPlayerName);
 
       document.getElementById('joinScreen').classList.add('hidden');
-      socket.emit('joinRoom', {
-        roomId: currentRoomId,
-        name: myPlayerName,
-        playerId: myPlayerId
+
+      if (socket && isSocketConnected) {
+        socket.emit('joinRoom', { roomId: currentRoomId, name: myPlayerName, playerId: myPlayerId });
+      }
+
+      fetch('/api/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId: currentRoomId, name: myPlayerName, playerId: myPlayerId })
+      }).then(res => res.json()).then(data => {
+        if (data.state) {
+          currentGameState = data.state;
+          renderMobileState(data.state);
+        }
       });
     }
-
-    socket.on('playerJoined', (data) => {
-      myPlayerId = data.playerId;
-      localStorage.setItem('poker_player_id', myPlayerId);
-      updatePlayerInfo(data.player);
-    });
-
-    socket.on('gameState', (state) => {
-      currentGameState = state;
-      renderMobileState(state);
-    });
 
     socket.on('actionError', (err) => {
       alert(err.message);
@@ -359,11 +416,24 @@
       else if (action === 'check') SoundEffects.playCheck();
       else SoundEffects.playChip();
 
-      socket.emit('playerAction', {
-        roomId: currentRoomId,
-        action,
-        amount
-      });
+      if (socket && isSocketConnected) {
+        socket.emit('playerAction', {
+          roomId: currentRoomId,
+          action,
+          amount
+        });
+      }
+
+      fetch('/api/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId: currentRoomId, playerId: myPlayerId, action, amount })
+      }).then(res => res.json()).then(data => {
+        if (data.state) {
+          currentGameState = data.state;
+          renderMobileState(data.state);
+        }
+      }).catch(e => console.error(e));
     }
 
     function doCallOrCheck() {
@@ -387,7 +457,14 @@
     function requestRebuy() {
       if (confirm('Deseja recarregar +100 fichas na mesa?')) {
         SoundEffects.playChip();
-        socket.emit('rebuy', { roomId: currentRoomId, playerId: myPlayerId, amount: 100 });
+        if (socket && isSocketConnected) {
+          socket.emit('rebuy', { roomId: currentRoomId, playerId: myPlayerId, amount: 100 });
+        }
+        fetch('/api/rebuy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roomId: currentRoomId, playerId: myPlayerId, amount: 100 })
+        }).then(syncMobileState);
       }
     }
 

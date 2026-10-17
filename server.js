@@ -101,6 +101,107 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
+// REST Fallback: Obter estado atual da mesa
+app.get('/api/state', (req, res) => {
+  const roomId = (req.query.room || 'MESA-1').toUpperCase();
+  const room = getOrCreateRoom(roomId);
+  res.json(room.getState());
+});
+
+// REST Fallback: Entrar na mesa
+app.post('/api/join', async (req, res) => {
+  const { roomId = 'MESA-1', name, playerId, isHost = false } = req.body;
+  const room = getOrCreateRoom(roomId);
+  const player = room.addPlayer(playerId, name, null, isHost);
+  await db.savePlayer(room.roomId, player);
+  io.to(room.roomId).emit('gameState', room.getState());
+  res.json({ success: true, player, state: room.getState() });
+});
+
+// REST Fallback: Executar Ação (Fold, Check, Call, Raise)
+app.post('/api/action', async (req, res) => {
+  const { roomId = 'MESA-1', playerId, action, amount = 0 } = req.body;
+  const room = rooms.get(roomId?.toUpperCase());
+  if (!room) return res.status(404).json({ error: 'Mesa não encontrada' });
+
+  const player = room.players.find(p => p.id === playerId);
+  const beforeChips = player ? player.chips : 0;
+
+  const result = room.playerAction(playerId, action, amount);
+  if (!result.success) {
+    return res.status(400).json({ error: result.message });
+  }
+
+  if (player) {
+    await db.savePlayer(room.roomId, player);
+    const spent = beforeChips - player.chips;
+    if (spent > 0) {
+      await db.recordTransaction(room.roomId, player.id, player.name, action.toUpperCase(), spent, player.chips);
+    }
+  }
+
+  if (room.state === 'HAND_OVER' && room.winners.length > 0) {
+    await db.recordHandHistory(room.roomId, room.handNumber, room.winners.reduce((acc, w) => acc + w.amount, 0), room.winners, 'Vitória por Fold de todos');
+  }
+
+  io.to(room.roomId).emit('gameState', room.getState());
+  res.json({ success: true, state: room.getState() });
+});
+
+// REST Fallback: Iniciar Nova Mão
+app.post('/api/start-hand', (req, res) => {
+  const { roomId = 'MESA-1' } = req.body;
+  const room = getOrCreateRoom(roomId);
+  const ok = room.startNewHand();
+  if (ok) io.to(room.roomId).emit('gameState', room.getState());
+  res.json({ success: ok, state: room.getState() });
+});
+
+// REST Fallback: Resolver Showdown
+app.post('/api/showdown', async (req, res) => {
+  const { roomId = 'MESA-1', winnerIds } = req.body;
+  const room = rooms.get(roomId?.toUpperCase());
+  if (!room) return res.status(404).json({ error: 'Mesa não encontrada' });
+
+  const potTotal = room.pot + room.players.reduce((sum, p) => sum + p.currentBet, 0);
+  const ok = room.resolveShowdown(winnerIds);
+  if (ok) {
+    await db.recordHandHistory(room.roomId, room.handNumber, potTotal, room.winners, 'Showdown de cartas físicas');
+    for (const w of room.winners) {
+      const wp = room.players.find(p => p.id === w.id);
+      if (wp) await db.savePlayer(room.roomId, wp);
+    }
+    io.to(room.roomId).emit('gameState', room.getState());
+  }
+  res.json({ success: ok, state: room.getState() });
+});
+
+// REST Fallback: Rebuy
+app.post('/api/rebuy', async (req, res) => {
+  const { roomId = 'MESA-1', playerId, amount = 100 } = req.body;
+  const room = rooms.get(roomId?.toUpperCase());
+  if (!room) return res.status(404).json({ error: 'Mesa não encontrada' });
+
+  const ok = room.rebuy(playerId, amount);
+  if (ok) {
+    const p = room.players.find(pl => pl.id === playerId);
+    if (p) await db.savePlayer(room.roomId, p);
+    io.to(room.roomId).emit('gameState', room.getState());
+  }
+  res.json({ success: ok, state: room.getState() });
+});
+
+// REST Fallback: Forçar Avanço
+app.post('/api/advance', (req, res) => {
+  const { roomId = 'MESA-1' } = req.body;
+  const room = rooms.get(roomId?.toUpperCase());
+  if (!room) return res.status(404).json({ error: 'Mesa não encontrada' });
+
+  const ok = room.forceAdvance();
+  if (ok) io.to(room.roomId).emit('gameState', room.getState());
+  res.json({ success: ok, state: room.getState() });
+});
+
 // Socket.io - Comunicação em Tempo Real
 io.on('connection', (socket) => {
   let currentRoomId = null;
