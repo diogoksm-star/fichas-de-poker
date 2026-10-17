@@ -79,14 +79,14 @@ app.get('/api/info', async (req, res) => {
     });
 
     res.json({
-      localIp: host,
+      localIp: hostDisplay,
       port: PORT,
       roomId,
       clientUrl,
       qrCode: qrCodeDataUrl
     });
   } catch (err) {
-    res.status(500).json({ error: 'Erro gerando QR Code' });
+    res.status(500).json({ error: 'Erro gerando QR Code', details: err.message });
   }
 });
 
