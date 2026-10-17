@@ -5,6 +5,7 @@ class PokerRoom {
     this.startingChips = options.startingChips || 100;
     this.smallBlind = options.smallBlind || 1;
     this.bigBlind = options.bigBlind || 2;
+    this.turnTimeLimit = options.turnTimeLimit || 30; // Segundos por turno
     
     this.players = []; // { id, name, socketId, chips, currentBet, totalHandBet, folded, isAllIn, isSittingOut, hasActed, isHost }
     this.state = 'LOBBY'; // LOBBY, PREFLOP, FLOP, TURN, RIVER, SHOWDOWN, HAND_OVER
@@ -17,6 +18,7 @@ class PokerRoom {
     this.sbIndex = -1;
     this.bbIndex = -1;
     this.currentTurnIndex = -1;
+    this.turnStartTime = Date.now();
     
     this.actionLog = [];
     this.lastAction = null;
@@ -33,7 +35,6 @@ class PokerRoom {
   addPlayer(id, name, socketId, isHost = false) {
     let player = this.players.find(p => p.id === id);
     if (player) {
-      // Reconexão
       player.socketId = socketId;
       player.name = name || player.name;
       this.log(`${player.name} reconectou à mesa.`);
@@ -66,21 +67,19 @@ class PokerRoom {
 
     const player = this.players[index];
     if (this.state !== 'LOBBY' && this.state !== 'HAND_OVER' && !player.folded) {
-      // Se estiver em jogo ativo, dá fold primeiro
       this.playerAction(player.id, 'fold');
     }
 
     this.players.splice(index, 1);
     this.log(`${player.name} saiu da mesa.`);
 
-    // Se o host saiu, passa pro próximo
     if (player.isHost && this.players.length > 0) {
       this.players[0].isHost = true;
     }
 
-    // Se sobrou menos de 2 jogadores, volta pro lobby
     if (this.players.length < 2 && this.state !== 'LOBBY') {
       this.state = 'LOBBY';
+      this.currentTurnIndex = -1;
       this.log('Mesa em espera: aguardando pelo menos 2 jogadores.');
     }
 
@@ -100,8 +99,9 @@ class PokerRoom {
     if (settings.startingChips) this.startingChips = Number(settings.startingChips);
     if (settings.smallBlind) this.smallBlind = Number(settings.smallBlind);
     if (settings.bigBlind) this.bigBlind = Number(settings.bigBlind);
+    if (settings.turnTimeLimit !== undefined) this.turnTimeLimit = Number(settings.turnTimeLimit);
     this.minRaise = this.bigBlind;
-    this.log(`Configurações atualizadas: Blinds ${this.smallBlind}/${this.bigBlind}, Stack inicial ${this.startingChips}.`);
+    this.log(`Configurações: Blinds ${this.smallBlind}/${this.bigBlind}, Timer ${this.turnTimeLimit}s, Stack ${this.startingChips}.`);
   }
 
   getActivePlayers() {
@@ -159,7 +159,7 @@ class PokerRoom {
       p.hasActed = false;
     });
 
-    // Avança dealer (se não for a 1ª mão)
+    // Avança dealer
     if (this.handNumber > 1) {
       this.dealerIndex = this.getNextActiveIndex(this.dealerIndex);
     } else {
@@ -168,7 +168,6 @@ class PokerRoom {
 
     // Calcula Small Blind e Big Blind
     if (this.players.length === 2) {
-      // Heads-Up: Dealer é o Small Blind e fala primeiro no pré-flop
       this.sbIndex = this.dealerIndex;
       this.bbIndex = this.getNextActiveIndex(this.sbIndex);
     } else {
@@ -198,14 +197,33 @@ class PokerRoom {
 
     // Primeiro a agir no pré-flop é quem está à esquerda do BB (UTG)
     this.currentTurnIndex = this.getNextInHandIndex(this.bbIndex);
+    this.turnStartTime = Date.now();
 
-    // Se ninguém puder agir (todos all-in já nos blinds), vai pro showdown
     if (this.currentTurnIndex === -1) {
       this.advanceStreet();
     }
 
     this.log(`--- MÃO #${this.handNumber} INICIADA (PRÉ-FLOP) ---`);
     return true;
+  }
+
+  // Verifica timer do turno atual e toma ação se expirou
+  checkTimer() {
+    if (this.state === 'LOBBY' || this.state === 'SHOWDOWN' || this.state === 'HAND_OVER') return false;
+    if (this.currentTurnIndex === -1 || this.turnTimeLimit <= 0) return false;
+
+    const elapsedSeconds = (Date.now() - this.turnStartTime) / 1000;
+    if (elapsedSeconds >= this.turnTimeLimit) {
+      const player = this.players[this.currentTurnIndex];
+      if (!player) return false;
+
+      const callCost = this.currentMaxBet - player.currentBet;
+      const autoAction = callCost <= 0 ? 'check' : 'fold';
+
+      this.log(`⏱️ Tempo esgotado para ${player.name} (${this.turnTimeLimit}s)! Ação automática: ${autoAction.toUpperCase()}`);
+      return this.playerAction(player.id, autoAction);
+    }
+    return false;
   }
 
   playerAction(playerId, action, amount = 0) {
@@ -236,7 +254,6 @@ class PokerRoom {
     } 
     else if (action === 'call') {
       if (callCost <= 0) {
-        // Se callCost é 0, vira check
         player.hasActed = true;
         this.log(`${player.name} deu CHECK.`);
         this.lastAction = { player: player.name, action: 'CHECK', amount: 0 };
@@ -258,8 +275,6 @@ class PokerRoom {
       }
     } 
     else if (action === 'bet' || action === 'raise') {
-      // amount é a nova aposta total do jogador na rodada atual
-      // Ex: se o jogador já tem 2 no pré-flop e quer aumentar para 6, amount = 6
       if (amount <= this.currentMaxBet && amount < player.chips + player.currentBet) {
         return { success: false, message: `A aposta deve ser maior que a aposta atual (${this.currentMaxBet}).` };
       }
@@ -312,6 +327,7 @@ class PokerRoom {
       this.advanceStreet();
     } else {
       this.currentTurnIndex = this.getNextInHandIndex(this.currentTurnIndex);
+      this.turnStartTime = Date.now();
       if (this.currentTurnIndex === -1) {
         this.advanceStreet();
       }
@@ -322,14 +338,12 @@ class PokerRoom {
 
   isStreetComplete() {
     const inHand = this.getInHandPlayers();
-    // Jogadores que não estão all-in
     const eligibleToAct = inHand.filter(p => !p.isAllIn);
 
     if (eligibleToAct.length === 0) {
       return true; // Todos que sobraram estão all-in
     }
 
-    // Se sobrou apenas 1 jogador que não está all-in, e todos os outros já igualaram a aposta
     for (const p of eligibleToAct) {
       if (!p.hasActed) return false;
       if (p.currentBet !== this.currentMaxBet) return false;
@@ -372,20 +386,44 @@ class PokerRoom {
       return;
     }
 
-    // Se menos de 2 jogadores podem agir (ex: todos all-in ou só 1 tem fichas), avança pro showdown
+    // Se todos ou quase todos estão all-in
     if (canAct.length < 2) {
-      // Se todos estiverem all-in, podemos ir direto ao Showdown
+      this.log('Jogadores em All-In! Revelem as cartas físicas até o Showdown.');
+      // Permite avançar até o Showdown sem travar
       this.currentTurnIndex = -1;
-      this.log('Jogadores em All-In! Avancem as cartas físicas até o Showdown.');
-      if (this.state !== 'SHOWDOWN') {
-        // Deixa na street para eles acompanharem as cartas físicas
-        this.currentTurnIndex = -1;
-      }
       return;
     }
 
     // A ação pós-flop sempre começa à esquerda do Dealer
     this.currentTurnIndex = this.getNextInHandIndex(this.dealerIndex);
+    this.turnStartTime = Date.now();
+  }
+
+  // Controle manual de street pelo Host (Pré-Flop, Flop, Turn, River, Showdown)
+  setStreet(streetName) {
+    streetName = streetName.toUpperCase();
+    const validStreets = ['PREFLOP', 'FLOP', 'TURN', 'RIVER', 'SHOWDOWN'];
+    if (!validStreets.includes(streetName)) return false;
+
+    this.collectBetsIntoPot();
+    this.state = streetName;
+    this.log(`Host alterou a fase da mesa manualmente para: ${streetName}`);
+
+    if (streetName === 'SHOWDOWN') {
+      this.currentTurnIndex = -1;
+    } else {
+      const inHand = this.getInHandPlayers();
+      const canAct = inHand.filter(p => !p.isAllIn);
+      if (canAct.length >= 2) {
+        this.currentTurnIndex = streetName === 'PREFLOP' 
+          ? this.getNextInHandIndex(this.bbIndex)
+          : this.getNextInHandIndex(this.dealerIndex);
+        this.turnStartTime = Date.now();
+      } else {
+        this.currentTurnIndex = -1;
+      }
+    }
+    return true;
   }
 
   awardSingleWinner(winner) {
@@ -398,9 +436,12 @@ class PokerRoom {
     this.currentTurnIndex = -1;
   }
 
+  // Pode ser chamado a qualquer momento pelo Host para decidir o vencedor do pote!
   resolveShowdown(winnerIds) {
     if (!winnerIds || winnerIds.length === 0) return false;
     this.collectBetsIntoPot();
+
+    if (this.pot <= 0) return false;
 
     const winningPlayers = this.players.filter(p => winnerIds.includes(p.id));
     if (winningPlayers.length === 0) return false;
@@ -435,7 +476,6 @@ class PokerRoom {
   }
 
   resetHand() {
-    // Caso alguém tenha errado muito as apostas ou distribuído carta errada na vida real
     this.players.forEach(p => {
       p.chips += p.totalHandBet;
       p.currentBet = 0;
@@ -453,6 +493,12 @@ class PokerRoom {
   getState() {
     const totalPot = this.pot + this.players.reduce((sum, p) => sum + p.currentBet, 0);
 
+    let remainingSeconds = 0;
+    if (this.currentTurnIndex >= 0 && this.state !== 'LOBBY' && this.state !== 'SHOWDOWN' && this.state !== 'HAND_OVER') {
+      const elapsed = (Date.now() - this.turnStartTime) / 1000;
+      remainingSeconds = Math.max(0, Math.ceil(this.turnTimeLimit - elapsed));
+    }
+
     return {
       roomId: this.roomId,
       state: this.state,
@@ -463,6 +509,8 @@ class PokerRoom {
       minRaise: this.minRaise,
       smallBlind: this.smallBlind,
       bigBlind: this.bigBlind,
+      turnTimeLimit: this.turnTimeLimit,
+      turnTimeRemaining: remainingSeconds,
       dealerIndex: this.dealerIndex,
       sbIndex: this.sbIndex,
       bbIndex: this.bbIndex,
@@ -488,6 +536,54 @@ class PokerRoom {
       lastAction: this.lastAction,
       winners: this.winners
     };
+  }
+
+  toJSON() {
+    return {
+      roomId: this.roomId,
+      startingChips: this.startingChips,
+      smallBlind: this.smallBlind,
+      bigBlind: this.bigBlind,
+      turnTimeLimit: this.turnTimeLimit,
+      players: this.players,
+      state: this.state,
+      pot: this.pot,
+      currentMaxBet: this.currentMaxBet,
+      minRaise: this.minRaise,
+      dealerIndex: this.dealerIndex,
+      sbIndex: this.sbIndex,
+      bbIndex: this.bbIndex,
+      currentTurnIndex: this.currentTurnIndex,
+      turnStartTime: this.turnStartTime,
+      actionLog: this.actionLog,
+      lastAction: this.lastAction,
+      handNumber: this.handNumber,
+      winners: this.winners
+    };
+  }
+
+  static fromJSON(data) {
+    const room = new PokerRoom(data.roomId, {
+      startingChips: data.startingChips,
+      smallBlind: data.smallBlind,
+      bigBlind: data.bigBlind,
+      turnTimeLimit: data.turnTimeLimit
+    });
+    room.players = data.players || [];
+    room.state = data.state || 'LOBBY';
+    room.pot = data.pot || 0;
+    room.currentMaxBet = data.currentMaxBet || 0;
+    room.minRaise = data.minRaise || 2;
+    room.dealerIndex = data.dealerIndex || 0;
+    room.sbIndex = data.sbIndex ?? -1;
+    room.bbIndex = data.bbIndex ?? -1;
+    room.currentTurnIndex = data.currentTurnIndex ?? -1;
+    room.turnStartTime = data.turnStartTime || Date.now();
+    room.actionLog = data.actionLog || [];
+    room.lastAction = data.lastAction || null;
+    room.handNumber = data.handNumber || 0;
+    room.winners = data.winners || [];
+    return room;
   }
 
   getRandomColor() {

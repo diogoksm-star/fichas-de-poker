@@ -100,10 +100,13 @@
       <div id="waitingTurnBox" class="flex items-center justify-center gap-2 text-slate-300 text-xs font-semibold py-1">
         <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
         <span id="waitingMessage">Aguardando início da mão...</span>
+        <span id="waitingTimerBadge" class="hidden text-amber-400 font-mono font-bold bg-slate-950 px-2 py-0.5 rounded-lg border border-slate-800 text-[11px]">30s</span>
       </div>
 
-      <div id="yourTurnBox" class="hidden py-1 text-emerald-400 font-black text-base uppercase tracking-wider flex items-center justify-center gap-2 animate-bounce">
-        <i data-lucide="bell-ring" class="w-5 h-5"></i> É A SUA VEZ DE JOGAR!
+      <div id="yourTurnBox" class="hidden py-1 text-emerald-400 font-black text-base uppercase tracking-wider flex items-center justify-center gap-2">
+        <i data-lucide="bell-ring" class="w-5 h-5 animate-bounce"></i>
+        <span>SUA VEZ!</span>
+        <span id="myTurnCountdown" class="text-white font-mono bg-emerald-950 border border-emerald-400/50 px-2.5 py-0.5 rounded-xl text-sm">30s</span>
       </div>
     </div>
 
@@ -166,6 +169,7 @@
     let currentRoomId = initialRoom;
     let currentGameState = null;
     let targetBetAmount = 2;
+    let turnSoundPlayed = false;
 
     // Configura sala no input
     document.getElementById('inputRoomId').value = currentRoomId;
@@ -297,7 +301,16 @@
       document.getElementById('myChipsDisplay').innerText = me.chips;
       document.getElementById('myCurrentBetDisplay').innerText = me.currentBet;
       document.getElementById('tablePotDisplay').innerText = state.pot;
-      document.getElementById('streetIndicator').innerText = `Fase: ${state.state}`;
+      const streetMap = {
+        'LOBBY': 'Aguardando',
+        'PREFLOP': 'Pré-Flop (Cartas na mão)',
+        'FLOP': 'Flop (3 cartas na mesa)',
+        'TURN': 'Turn (4ª carta na mesa)',
+        'RIVER': 'River (5ª carta na mesa)',
+        'SHOWDOWN': 'Showdown (Revelação)',
+        'HAND_OVER': 'Mão Encerrada'
+      };
+      document.getElementById('streetIndicator').innerText = `Fase: ${streetMap[state.state] || state.state}`;
       document.getElementById('playerConnectionText').innerText = `Mesa: ${state.roomId}`;
 
       // Papel (Dealer, SB, BB)
@@ -313,6 +326,10 @@
       const waitingBox = document.getElementById('waitingTurnBox');
       const yourTurnBox = document.getElementById('yourTurnBox');
       const turnCard = document.getElementById('turnStatusCard');
+      const waitingTimer = document.getElementById('waitingTimerBadge');
+      const myTurnTimer = document.getElementById('myTurnCountdown');
+
+      const rem = state.turnTimeRemaining !== undefined ? state.turnTimeRemaining : 30;
 
       if (isMyTurn) {
         controls.classList.remove('opacity-40', 'pointer-events-none');
@@ -320,28 +337,47 @@
         yourTurnBox.classList.remove('hidden');
         turnCard.classList.add('border-emerald-500', 'bg-emerald-950/30');
 
-        // Vibrar celular e tocar som
-        if (navigator.vibrate) {
-          navigator.vibrate([100, 50, 100]);
+        myTurnTimer.innerText = `${rem}s`;
+        if (rem <= 5) {
+          myTurnTimer.className = 'text-white font-mono bg-red-600 border border-red-400 px-2.5 py-0.5 rounded-xl text-sm animate-ping';
+          if (navigator.vibrate) navigator.vibrate(100);
+        } else {
+          myTurnTimer.className = 'text-white font-mono bg-emerald-950 border border-emerald-400/50 px-2.5 py-0.5 rounded-xl text-sm';
         }
-        SoundEffects.playYourTurn();
+
+        // Tocar som de vez
+        if (!turnSoundPlayed) {
+          SoundEffects.playYourTurn();
+          if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+          turnSoundPlayed = true;
+        }
 
         updateActionButtons(me, state);
       } else {
+        turnSoundPlayed = false;
         controls.classList.add('opacity-40', 'pointer-events-none');
         waitingBox.classList.remove('hidden');
         yourTurnBox.classList.add('hidden');
         turnCard.classList.remove('border-emerald-500', 'bg-emerald-950/30');
 
         const activePlayer = state.players.find(p => p.id === state.currentTurnPlayerId);
-        if (me.folded) {
+        if (state.state === 'HAND_OVER' && state.winners && state.winners.length > 0) {
+          const names = state.winners.map(w => `${w.name} (+${w.amount})`).join(', ');
+          document.getElementById('waitingMessage').innerText = `🏆 Vencedor: ${names}`;
+          waitingTimer.classList.add('hidden');
+        } else if (me.folded) {
           document.getElementById('waitingMessage').innerText = 'Você deu Fold nesta mão.';
+          waitingTimer.classList.add('hidden');
         } else if (me.isAllIn) {
           document.getElementById('waitingMessage').innerText = 'Você está em ALL-IN!';
+          waitingTimer.classList.add('hidden');
         } else if (activePlayer) {
-          document.getElementById('waitingMessage').innerText = `Vez de ${activePlayer.name} apostar...`;
+          document.getElementById('waitingMessage').innerText = `Vez de ${activePlayer.name}...`;
+          waitingTimer.innerText = `${rem}s`;
+          waitingTimer.classList.remove('hidden');
         } else {
           document.getElementById('waitingMessage').innerText = 'Aguardando próxima ação da mesa...';
+          waitingTimer.classList.add('hidden');
         }
       }
     }

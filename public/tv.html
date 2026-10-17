@@ -8,15 +8,15 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
-  <!-- QRCode.js (Garante geração instantânea no navegador) -->
+  <!-- QRCode.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <!-- Socket.io CDN (Funciona tanto localmente quanto na nuvem) -->
+  <!-- Socket.io CDN -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <!-- Som e Estilos -->
   <link rel="stylesheet" href="/css/style.css">
   <script src="/sound.js"></script>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between p-4 overflow-hidden">
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between p-4 overflow-hidden select-none">
 
   <!-- TOPO: Cabeçalho com Informações da Sala e Status -->
   <header class="flex items-center justify-between bg-slate-900/80 backdrop-blur border border-slate-800 rounded-2xl px-6 py-3 shadow-lg z-20">
@@ -34,7 +34,7 @@
 
     <!-- Indicador da Street Atual -->
     <div class="flex items-center gap-3">
-      <div id="streetBadge" class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-5 py-1.5 rounded-full text-sm font-extrabold tracking-wider uppercase shadow-lg shadow-emerald-950/40 animate-pulse">
+      <div id="streetBadge" class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-5 py-1.5 rounded-full text-sm font-extrabold tracking-wider uppercase shadow-lg shadow-emerald-950/40">
         LOBBY • AGUARDANDO
       </div>
       <div id="handCountBadge" class="bg-slate-800 text-slate-300 text-xs px-3 py-1.5 rounded-lg border border-slate-700">
@@ -47,14 +47,17 @@
       <button onclick="startHand()" id="btnStartHand" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm px-4 py-2 rounded-xl shadow-lg shadow-emerald-700/30 flex items-center gap-2 transition active:scale-95">
         <i data-lucide="play" class="w-4 h-4"></i> Iniciar Mão
       </button>
-      <button onclick="forceAdvance()" id="btnAdvance" class="bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm px-3 py-2 rounded-xl shadow flex items-center gap-1.5 transition active:scale-95">
-        <i data-lucide="fast-forward" class="w-4 h-4"></i> Avançar
+
+      <!-- BOTÃO DIRETO: DECIDIR VENCEDOR / ENTREGAR POTE A QUALQUER MOMENTO -->
+      <button onclick="openShowdownManual()" id="btnPickWinner" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm px-4 py-2 rounded-xl shadow-lg shadow-amber-500/30 flex items-center gap-2 transition active:scale-95">
+        <i data-lucide="trophy" class="w-4 h-4"></i> Decidir Vencedor
       </button>
+
       <button onclick="toggleQrModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2 rounded-xl border border-slate-700" title="Ver QR Code">
         <i data-lucide="qr-code" class="w-5 h-5"></i>
       </button>
       <button onclick="toggleLeaderboardModal()" class="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 p-2 rounded-xl border border-amber-500/40" title="Ranking da Noite">
-        <i data-lucide="trophy" class="w-5 h-5"></i>
+        <i data-lucide="award" class="w-5 h-5"></i>
       </button>
       <button onclick="toggleSettingsModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2 rounded-xl border border-slate-700" title="Configurações">
         <i data-lucide="settings" class="w-5 h-5"></i>
@@ -66,12 +69,33 @@
   <main class="relative flex-1 flex items-center justify-center my-2">
     
     <!-- Mesa Oval -->
-    <div class="w-full max-w-5xl h-[520px] poker-table-outer flex items-center justify-center relative">
+    <div class="w-full max-w-5xl h-[530px] poker-table-outer flex items-center justify-center relative">
       <div class="w-full h-full poker-table-felt relative flex flex-col items-center justify-center">
 
+        <!-- CARTAS NA MESA FÍSICA (Slots Comunitários com Brilho Dinâmico) -->
+        <div class="z-10 flex items-center gap-2 mb-2">
+          <div id="cardFlop1" class="w-12 h-16 rounded-xl bg-slate-950/80 border-2 border-slate-800 flex flex-col items-center justify-center text-[10px] font-black text-slate-500 transition-all shadow-md">
+            <span>FLOP</span><span class="text-xs">1</span>
+          </div>
+          <div id="cardFlop2" class="w-12 h-16 rounded-xl bg-slate-950/80 border-2 border-slate-800 flex flex-col items-center justify-center text-[10px] font-black text-slate-500 transition-all shadow-md">
+            <span>FLOP</span><span class="text-xs">2</span>
+          </div>
+          <div id="cardFlop3" class="w-12 h-16 rounded-xl bg-slate-950/80 border-2 border-slate-800 flex flex-col items-center justify-center text-[10px] font-black text-slate-500 transition-all shadow-md">
+            <span>FLOP</span><span class="text-xs">3</span>
+          </div>
+          <div class="w-1 h-8 bg-slate-700/50 rounded mx-1"></div>
+          <div id="cardTurn" class="w-12 h-16 rounded-xl bg-slate-950/80 border-2 border-slate-800 flex flex-col items-center justify-center text-[10px] font-black text-slate-500 transition-all shadow-md">
+            <span>TURN</span><span class="text-xs">4ª</span>
+          </div>
+          <div class="w-1 h-8 bg-slate-700/50 rounded mx-1"></div>
+          <div id="cardRiver" class="w-12 h-16 rounded-xl bg-slate-950/80 border-2 border-slate-800 flex flex-col items-center justify-center text-[10px] font-black text-slate-500 transition-all shadow-md">
+            <span>RIVER</span><span class="text-xs">5ª</span>
+          </div>
+        </div>
+
         <!-- Banner Central do Pote -->
-        <div class="z-10 flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-md border border-amber-500/40 rounded-3xl px-8 py-4 shadow-2xl">
-          <div class="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-widest mb-1">
+        <div class="z-10 flex flex-col items-center justify-center bg-slate-950/85 backdrop-blur-md border border-amber-500/40 rounded-3xl px-8 py-3.5 shadow-2xl">
+          <div class="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-widest mb-0.5">
             <span class="chip-token chip-gold">♦</span> POTE TOTAL
           </div>
           <div class="flex items-baseline gap-2">
@@ -87,25 +111,38 @@
           </div>
         </div>
 
-        <!-- Mensagem de Showdown ou Vencedor -->
-        <div id="winnerBanner" class="absolute z-20 bg-amber-500/90 text-slate-950 font-black px-6 py-2.5 rounded-2xl text-lg shadow-2xl uppercase tracking-wider flex items-center gap-2 transform transition-all duration-300 scale-0">
+        <!-- TIMER DE MÃO / VEZ DE QUEM AGIR -->
+        <div id="turnTimerContainer" class="z-10 mt-2 flex items-center gap-2.5 bg-slate-950/90 border border-slate-800 px-5 py-1.5 rounded-full shadow-xl transition-all">
+          <i data-lucide="clock" class="w-4 h-4 text-amber-400 animate-pulse"></i>
+          <span id="turnTimerPlayer" class="text-xs font-bold text-slate-300">Aguardando início...</span>
+          <span id="turnTimerCountdown" class="text-xs font-black text-amber-400">30s</span>
+        </div>
+
+        <!-- BARRA DE NAVEGAÇÃO DE CARTAS / STREETS DO POKER (HOST CONTROLS NO PC) -->
+        <div class="z-10 mt-2.5 flex items-center gap-1.5 bg-slate-950/90 backdrop-blur px-3 py-1.5 rounded-2xl border border-slate-800/80 shadow-2xl text-xs font-bold">
+          <span class="text-slate-400 mr-1 text-[11px] uppercase tracking-wider">Cartas:</span>
+          <button onclick="setStreet('PREFLOP')" id="streetBtnPREFLOP" class="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition active:scale-95">Pré-Flop</button>
+          <button onclick="setStreet('FLOP')" id="streetBtnFLOP" class="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition active:scale-95">Flop (3)</button>
+          <button onclick="setStreet('TURN')" id="streetBtnTURN" class="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition active:scale-95">Turn (4ª)</button>
+          <button onclick="setStreet('RIVER')" id="streetBtnRIVER" class="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition active:scale-95">River (5ª)</button>
+          <button onclick="setStreet('SHOWDOWN')" id="streetBtnSHOWDOWN" class="px-2.5 py-1 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition active:scale-95">Showdown</button>
+        </div>
+
+        <!-- Mensagem de Vencedor -->
+        <div id="winnerBanner" class="absolute z-20 bg-amber-500/95 text-slate-950 font-black px-6 py-2.5 rounded-2xl text-lg shadow-2xl uppercase tracking-wider flex items-center gap-2 transform transition-all duration-300 scale-0">
           <i data-lucide="trophy" class="w-6 h-6"></i>
           <span id="winnerText">Vencedor da Rodada</span>
         </div>
 
         <!-- Grid/Posicionamento dos Jogadores ao redor da mesa -->
-        <div id="playersContainer" class="absolute inset-0 pointer-events-none">
-          <!-- Jogadores gerados dinamicamente via JS -->
-        </div>
+        <div id="playersContainer" class="absolute inset-0 pointer-events-none"></div>
 
-        <!-- QR Code Gigante no Centro da Mesa (Quando aguardando jogadores) -->
-        <div id="waitingPlayersAlert" class="z-10 mt-4 bg-slate-900/95 border border-amber-500/50 p-4 rounded-3xl text-center shadow-2xl flex flex-col items-center gap-2 max-w-sm">
-          <div id="tableQrCode" class="bg-white p-2.5 rounded-2xl shadow-inner flex items-center justify-center min-w-[140px] min-h-[140px]">
-            <!-- QR Code desenhado pelo JS -->
-          </div>
+        <!-- QR Code no Centro da Mesa (Quando aguardando jogadores) -->
+        <div id="waitingPlayersAlert" class="z-10 mt-3 bg-slate-900/95 border border-amber-500/50 p-3.5 rounded-3xl text-center shadow-2xl flex flex-col items-center gap-2 max-w-xs">
+          <div id="tableQrCode" class="bg-white p-2 rounded-2xl shadow-inner flex items-center justify-center min-w-[130px] min-h-[130px]"></div>
           <div class="text-center">
             <p class="text-white font-extrabold text-sm">Aponte a câmera para entrar</p>
-            <p id="tableUrlText" class="text-amber-400 font-mono text-[11px] font-bold mt-0.5 truncate max-w-[240px]">fichas-de-poker.vercel.app</p>
+            <p id="tableUrlText" class="text-amber-400 font-mono text-[11px] font-bold mt-0.5 truncate max-w-[220px]">Carregando...</p>
           </div>
         </div>
 
@@ -182,15 +219,16 @@
         <i data-lucide="trophy" class="w-8 h-8"></i>
       </div>
       <h2 class="text-2xl font-black text-white mb-1">Quem venceu a mão?</h2>
-      <p class="text-slate-400 text-sm mb-6">Olhem as cartas físicas na mesa. Selecione quem teve o melhor jogo (ou selecione mais de um para Split Pot):</p>
+      <p class="text-slate-400 text-sm mb-6">Olhem as cartas físicas na mesa. Selecione quem teve o melhor jogo (ou selecione múltiplos para Split Pot):</p>
 
-      <div id="showdownPlayersList" class="space-y-2 mb-6 max-h-60 overflow-y-auto">
-        <!-- Lista de checkboxes de jogadores ativos -->
-      </div>
+      <div id="showdownPlayersList" class="space-y-2 mb-6 max-h-60 overflow-y-auto"></div>
 
       <div class="flex items-center gap-3">
+        <button onclick="closeShowdownModal()" class="w-1/3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-sm py-3 rounded-xl transition">
+          Cancelar
+        </button>
         <button onclick="confirmShowdownWinners()" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-base py-3 rounded-xl shadow-lg shadow-amber-500/30 transition">
-          Confirmar Vencedor(es)
+          Confirmar e Entregar Pote
         </button>
       </div>
     </div>
@@ -243,7 +281,11 @@
           <input type="number" id="inputBb" value="2" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white">
         </div>
         <div>
-          <label class="block text-slate-400 mb-1">Fichas Iniciais (Novos Jogadores):</label>
+          <label class="block text-slate-400 mb-1">Tempo por Turno (Segundos):</label>
+          <input type="number" id="inputTimer" value="30" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white">
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">Fichas Iniciais:</label>
           <input type="number" id="inputStartingChips" value="100" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white">
         </div>
       </div>
@@ -260,6 +302,8 @@
     const roomId = (urlParams.get('room') || 'MESA-1').toUpperCase();
     document.getElementById('roomBadge').innerText = roomId;
 
+    let currentGameState = null;
+
     // Constrói URL direta do cliente para o QR Code imediato
     const currentHost = window.location.host;
     const clientUrl = `${window.location.protocol}//${currentHost}/play.html?room=${roomId}`;
@@ -273,7 +317,7 @@
 
       const tableQr = document.getElementById('tableQrCode');
       tableQr.innerHTML = '';
-      new QRCode(tableQr, { text: url, width: 140, height: 140, colorDark: "#0f172a", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
+      new QRCode(tableQr, { text: url, width: 130, height: 130, colorDark: "#0f172a", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
 
       const sideQr = document.getElementById('sideQrCode');
       sideQr.innerHTML = '';
@@ -285,7 +329,7 @@
     }
     generateQrCodes(clientUrl);
 
-    // Sistema Híbrido: Socket.IO + Polling Fallback para Nuvem/Vercel
+    // Sistema Híbrido: Socket.IO + Polling Fallback
     let socket = null;
     let isSocketConnected = false;
 
@@ -300,6 +344,7 @@
         });
 
         socket.on('gameState', (state) => {
+          currentGameState = state;
           renderTable(state);
         });
 
@@ -309,25 +354,23 @@
           document.getElementById('connectionStatus').className = 'text-amber-400 font-semibold';
         });
       } catch (e) {
-        console.warn('Socket indisponível, usando modo REST:', e);
+        console.warn('Socket indisponível:', e);
       }
     }
 
-    // Polling contínuo (Garante que funcione mesmo na Vercel Serverless)
     async function syncStateFromApi() {
       try {
         const res = await fetch(`/api/state?room=${roomId}`);
         if (res.ok) {
           const state = await res.json();
+          currentGameState = state;
           renderTable(state);
           if (!isSocketConnected) {
             document.getElementById('connectionStatus').innerText = 'Online (Nuvem 🟢)';
             document.getElementById('connectionStatus').className = 'text-emerald-400 font-semibold';
           }
         }
-      } catch (err) {
-        // Falha silenciosa
-      }
+      } catch (err) {}
     }
     syncStateFromApi();
     setInterval(syncStateFromApi, 1000);
@@ -354,6 +397,15 @@
       };
       streetBadge.innerText = streetMap[state.state] || state.state;
 
+      // Atualizar Cartas Comunitárias Visuais
+      updateCommunityCards(state.state);
+
+      // Atualizar Botões de Street Ativos
+      updateStreetButtons(state.state);
+
+      // Atualizar Timer de Ação
+      updateTurnTimer(state);
+
       // Aposta máxima
       const currentBetInfo = document.getElementById('currentBetInfo');
       if (state.currentMaxBet > 0 && state.state !== 'LOBBY' && state.state !== 'HAND_OVER') {
@@ -369,7 +421,7 @@
       // Atualizar Log de Ações
       renderActionLog(state.actionLog);
 
-      // Aviso / QR Code central de jogadores insuficientes
+      // QR Code central quando aguardando jogadores
       const waitingAlert = document.getElementById('waitingPlayersAlert');
       if (state.players.length < 2 || state.state === 'LOBBY') {
         waitingAlert.classList.remove('hidden');
@@ -390,11 +442,81 @@
         winnerBanner.classList.add('scale-0');
       }
 
-      // Se entrou em Showdown, abre modal para o host marcar quem ganhou
+      // Se entrou em Showdown automaticamente, abre modal
       if (state.state === 'SHOWDOWN') {
-        openShowdownModal(state.players.filter(p => !p.folded));
-      } else {
+        const active = state.players.filter(p => !p.folded);
+        openShowdownModal(active.length > 0 ? active : state.players);
+      } else if (state.state !== 'SHOWDOWN' && !manualShowdownOpen) {
         closeShowdownModal();
+      }
+    }
+
+    // Atualiza o brilho das cartas comunitárias físicas
+    function updateCommunityCards(state) {
+      const flopActive = ['FLOP', 'TURN', 'RIVER', 'SHOWDOWN'].includes(state);
+      const turnActive = ['TURN', 'RIVER', 'SHOWDOWN'].includes(state);
+      const riverActive = ['RIVER', 'SHOWDOWN'].includes(state);
+
+      ['cardFlop1', 'cardFlop2', 'cardFlop3'].forEach(id => {
+        const el = document.getElementById(id);
+        if (flopActive) {
+          el.className = 'w-12 h-16 rounded-xl bg-emerald-950/90 border-2 border-emerald-400 flex flex-col items-center justify-center text-[10px] font-black text-emerald-300 shadow-lg shadow-emerald-900/50 scale-105';
+        } else {
+          el.className = 'w-12 h-16 rounded-xl bg-slate-950/80 border-2 border-slate-800 flex flex-col items-center justify-center text-[10px] font-black text-slate-600 shadow-md';
+        }
+      });
+
+      const cardTurn = document.getElementById('cardTurn');
+      if (turnActive) {
+        cardTurn.className = 'w-12 h-16 rounded-xl bg-emerald-950/90 border-2 border-emerald-400 flex flex-col items-center justify-center text-[10px] font-black text-emerald-300 shadow-lg shadow-emerald-900/50 scale-105';
+      } else {
+        cardTurn.className = 'w-12 h-16 rounded-xl bg-slate-950/80 border-2 border-slate-800 flex flex-col items-center justify-center text-[10px] font-black text-slate-600 shadow-md';
+      }
+
+      const cardRiver = document.getElementById('cardRiver');
+      if (riverActive) {
+        cardRiver.className = 'w-12 h-16 rounded-xl bg-emerald-950/90 border-2 border-emerald-400 flex flex-col items-center justify-center text-[10px] font-black text-emerald-300 shadow-lg shadow-emerald-900/50 scale-105';
+      } else {
+        cardRiver.className = 'w-12 h-16 rounded-xl bg-slate-950/80 border-2 border-slate-800 flex flex-col items-center justify-center text-[10px] font-black text-slate-600 shadow-md';
+      }
+    }
+
+    // Atualiza botões de street
+    function updateStreetButtons(state) {
+      ['PREFLOP', 'FLOP', 'TURN', 'RIVER', 'SHOWDOWN'].forEach(s => {
+        const btn = document.getElementById('streetBtn' + s);
+        if (!btn) return;
+        if (state === s) {
+          btn.className = 'px-2.5 py-1 rounded-xl bg-emerald-600 text-white border border-emerald-400 font-extrabold shadow';
+        } else {
+          btn.className = 'px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition active:scale-95';
+        }
+      });
+    }
+
+    // Atualiza timer de turno na TV
+    function updateTurnTimer(state) {
+      const timerBox = document.getElementById('turnTimerContainer');
+      const timerPlayer = document.getElementById('turnTimerPlayer');
+      const timerCount = document.getElementById('turnTimerCountdown');
+
+      if (state.currentTurnPlayerId && state.state !== 'LOBBY' && state.state !== 'SHOWDOWN' && state.state !== 'HAND_OVER') {
+        const active = state.players.find(p => p.id === state.currentTurnPlayerId);
+        timerBox.classList.remove('hidden');
+        timerPlayer.innerText = active ? `Vez de ${active.name}:` : 'Pensando...';
+        
+        const rem = state.turnTimeRemaining !== undefined ? state.turnTimeRemaining : 30;
+        timerCount.innerText = `${rem}s`;
+
+        if (rem <= 5) {
+          timerCount.className = 'text-xs font-black text-red-500 animate-ping';
+        } else if (rem <= 10) {
+          timerCount.className = 'text-xs font-black text-amber-400 animate-pulse';
+        } else {
+          timerCount.className = 'text-xs font-black text-emerald-400';
+        }
+      } else {
+        timerBox.classList.add('hidden');
       }
     }
 
@@ -468,7 +590,7 @@
       `).join('');
     }
 
-    // Ações do Host (Dispara via Socket e via REST)
+    // Ações do Host
     function startHand() {
       SoundEffects.playChip();
       if (socket && isSocketConnected) socket.emit('startHand', { roomId });
@@ -479,12 +601,12 @@
       }).then(res => res.json()).then(data => { if (data.state) renderTable(data.state); });
     }
 
-    function forceAdvance() {
-      if (socket && isSocketConnected) socket.emit('forceAdvance', { roomId });
-      fetch('/api/advance', {
+    function setStreet(street) {
+      if (socket && isSocketConnected) socket.emit('setStreet', { roomId, street });
+      fetch('/api/set-street', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roomId })
+        body: JSON.stringify({ roomId, street })
       }).then(res => res.json()).then(data => { if (data.state) renderTable(data.state); });
     }
 
@@ -499,13 +621,25 @@
       }
     }
 
-    // Modal Showdown
-    function openShowdownModal(activePlayers) {
+    // Modal Showdown / Decidir Vencedor Manual
+    let manualShowdownOpen = false;
+
+    function openShowdownManual() {
+      if (!currentGameState || !currentGameState.players || currentGameState.players.length === 0) {
+        alert('Não há jogadores na mesa.');
+        return;
+      }
+      manualShowdownOpen = true;
+      const notFolded = currentGameState.players.filter(p => !p.folded);
+      openShowdownModal(notFolded.length > 0 ? notFolded : currentGameState.players);
+    }
+
+    function openShowdownModal(playersToChoose) {
       const modal = document.getElementById('showdownModal');
       const list = document.getElementById('showdownPlayersList');
-      list.innerHTML = activePlayers.map(p => `
+      list.innerHTML = playersToChoose.map(p => `
         <label class="flex items-center justify-between p-3 bg-slate-950/70 border border-slate-800 hover:border-amber-500/50 rounded-xl cursor-pointer">
-          <span class="font-bold text-white text-base">${p.name}</span>
+          <span class="font-bold text-white text-base">${p.name} <span class="text-xs text-slate-400 font-normal">(${p.chips} fichas)</span></span>
           <input type="checkbox" name="showdownWinner" value="${p.id}" class="w-5 h-5 rounded text-amber-500 accent-amber-500">
         </label>
       `).join('');
@@ -513,6 +647,7 @@
     }
 
     function closeShowdownModal() {
+      manualShowdownOpen = false;
       document.getElementById('showdownModal').classList.add('hidden');
     }
 
@@ -582,13 +717,12 @@
     function saveSettings() {
       const sb = Number(document.getElementById('inputSb').value);
       const bb = Number(document.getElementById('inputBb').value);
+      const timer = Number(document.getElementById('inputTimer').value);
       const starting = Number(document.getElementById('inputStartingChips').value);
 
+      const settings = { smallBlind: sb, bigBlind: bb, turnTimeLimit: timer, startingChips: starting };
       if (socket && isSocketConnected) {
-        socket.emit('updateSettings', {
-          roomId,
-          settings: { smallBlind: sb, bigBlind: bb, startingChips: starting }
-        });
+        socket.emit('updateSettings', { roomId, settings });
       }
       toggleSettingsModal();
     }

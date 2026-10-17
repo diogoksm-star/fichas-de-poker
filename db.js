@@ -89,6 +89,12 @@ async function initDb() {
           balance_after INT NOT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        CREATE TABLE IF NOT EXISTS poker_room_state (
+          room_id VARCHAR(50) PRIMARY KEY,
+          state_data JSONB NOT NULL,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
       `);
       console.log('✅ [DATABASE] Tabelas PostgreSQL verificadas/criadas com sucesso.');
     } catch (err) {
@@ -208,10 +214,53 @@ async function getRoomStats(roomId) {
   }
 }
 
+async function saveRoomState(roomId, stateJson) {
+  if (isPostgres) {
+    try {
+      await pool.query(`
+        INSERT INTO poker_room_state (room_id, state_data, updated_at)
+        VALUES ($1, $2, CURRENT_TIMESTAMP)
+        ON CONFLICT (room_id) DO UPDATE SET
+          state_data = EXCLUDED.state_data,
+          updated_at = CURRENT_TIMESTAMP;
+      `, [roomId, JSON.stringify(stateJson)]);
+    } catch (e) {
+      console.error('Erro salvando estado da sala no Postgres:', e);
+    }
+  } else {
+    const data = getLocalData();
+    if (!data.roomStates) data.roomStates = {};
+    data.roomStates[roomId] = stateJson;
+    saveLocalData(data);
+  }
+}
+
+async function loadRoomState(roomId) {
+  if (isPostgres) {
+    try {
+      const res = await pool.query('SELECT state_data FROM poker_room_state WHERE room_id = $1', [roomId]);
+      if (res.rows.length > 0) {
+        return typeof res.rows[0].state_data === 'string' 
+          ? JSON.parse(res.rows[0].state_data) 
+          : res.rows[0].state_data;
+      }
+    } catch (e) {
+      console.error('Erro lendo estado da sala no Postgres:', e);
+    }
+  } else {
+    const data = getLocalData();
+    return data.roomStates ? data.roomStates[roomId] : null;
+  }
+  return null;
+}
+
 module.exports = {
   initDb,
   savePlayer,
   recordHandHistory,
   recordTransaction,
-  getRoomStats
+  getRoomStats,
+  saveRoomState,
+  loadRoomState
 };
+
