@@ -19,7 +19,7 @@
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between p-4 overflow-hidden select-none">
 
   <!-- TOPO: Cabeçalho com Informações da Sala e Status -->
-  <header class="flex items-center justify-between bg-slate-900/80 backdrop-blur border border-slate-800 rounded-2xl px-6 py-3 shadow-lg z-20">
+  <header class="flex items-center justify-between bg-slate-900/90 backdrop-blur border border-slate-800 rounded-2xl px-6 py-3 shadow-lg z-20">
     <div class="flex items-center gap-4">
       <div class="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-black text-xl shadow-inner">
         ♠
@@ -72,8 +72,14 @@
     <div class="w-full max-w-5xl h-[530px] poker-table-outer flex items-center justify-center relative">
       <div class="w-full h-full poker-table-felt relative flex flex-col items-center justify-center">
 
+        <!-- GUIA DE CARTAS FÍSICAS NO TELÃO -->
+        <div id="tvPhysicalDirector" class="z-10 mb-2 bg-slate-950/80 backdrop-blur-md border border-amber-500/30 px-5 py-1.5 rounded-full shadow-lg flex items-center gap-2 hidden">
+          <span class="text-sm">🃏</span>
+          <span id="tvPhysicalText" class="text-xs font-bold text-amber-300">Dealer: Embaralhe e dê 2 cartas fechadas para cada jogador</span>
+        </div>
+
         <!-- CARTAS NA MESA FÍSICA (Slots Comunitários com Brilho Dinâmico) -->
-        <div class="z-10 flex items-center gap-2 mb-2">
+        <div id="communityCardsContainer" class="z-10 flex items-center gap-2 mb-2">
           <div id="cardFlop1" class="w-12 h-16 rounded-xl bg-slate-950/80 border-2 border-slate-800 flex flex-col items-center justify-center text-[10px] font-black text-slate-500 transition-all shadow-md">
             <span>FLOP</span><span class="text-xs">1</span>
           </div>
@@ -94,7 +100,7 @@
         </div>
 
         <!-- Banner Central do Pote -->
-        <div class="z-10 flex flex-col items-center justify-center bg-slate-950/85 backdrop-blur-md border border-amber-500/40 rounded-3xl px-8 py-3.5 shadow-2xl">
+        <div id="potContainer" class="z-10 flex flex-col items-center justify-center bg-slate-950/85 backdrop-blur-md border border-amber-500/40 rounded-3xl px-8 py-3.5 shadow-2xl">
           <div class="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-widest mb-0.5">
             <span class="chip-token chip-gold">♦</span> POTE TOTAL
           </div>
@@ -119,8 +125,8 @@
         </div>
 
         <!-- BARRA DE NAVEGAÇÃO DE CARTAS / STREETS DO POKER (HOST CONTROLS NO PC) -->
-        <div class="z-10 mt-2.5 flex items-center gap-1.5 bg-slate-950/90 backdrop-blur px-3 py-1.5 rounded-2xl border border-slate-800/80 shadow-2xl text-xs font-bold">
-          <span class="text-slate-400 mr-1 text-[11px] uppercase tracking-wider">Cartas:</span>
+        <div id="streetsControlsBar" class="z-10 mt-2.5 flex items-center gap-1.5 bg-slate-950/90 backdrop-blur px-3 py-1.5 rounded-2xl border border-slate-800/80 shadow-2xl text-xs font-bold">
+          <span class="text-slate-400 mr-1 text-[11px] uppercase tracking-wider">Fase:</span>
           <button onclick="setStreet('PREFLOP')" id="streetBtnPREFLOP" class="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition active:scale-95">Pré-Flop</button>
           <button onclick="setStreet('FLOP')" id="streetBtnFLOP" class="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition active:scale-95">Flop (3)</button>
           <button onclick="setStreet('TURN')" id="streetBtnTURN" class="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition active:scale-95">Turn (4ª)</button>
@@ -129,21 +135,40 @@
         </div>
 
         <!-- Mensagem de Vencedor -->
-        <div id="winnerBanner" class="absolute z-20 bg-amber-500/95 text-slate-950 font-black px-6 py-2.5 rounded-2xl text-lg shadow-2xl uppercase tracking-wider flex items-center gap-2 transform transition-all duration-300 scale-0">
-          <i data-lucide="trophy" class="w-6 h-6"></i>
-          <span id="winnerText">Vencedor da Rodada</span>
+        <div id="winnerBanner" class="absolute z-30 bg-amber-500/95 text-slate-950 font-black px-8 py-4 rounded-3xl text-xl shadow-2xl uppercase tracking-wider flex flex-col items-center gap-2 transform transition-all duration-300 scale-0 border-2 border-white">
+          <div class="flex items-center gap-2">
+            <i data-lucide="trophy" class="w-7 h-7"></i>
+            <span id="winnerText">Vencedor da Rodada</span>
+          </div>
+          <button onclick="startHand()" class="mt-2 bg-slate-950 text-white hover:bg-slate-800 text-sm font-extrabold px-6 py-2.5 rounded-xl shadow-lg transition active:scale-95 flex items-center gap-2">
+            <i data-lucide="play" class="w-4 h-4 text-emerald-400"></i> Começar Próxima Mão
+          </button>
         </div>
 
         <!-- Grid/Posicionamento dos Jogadores ao redor da mesa -->
         <div id="playersContainer" class="absolute inset-0 pointer-events-none"></div>
 
-        <!-- QR Code no Centro da Mesa (Quando aguardando jogadores) -->
-        <div id="waitingPlayersAlert" class="z-10 mt-3 bg-slate-900/95 border border-amber-500/50 p-3.5 rounded-3xl text-center shadow-2xl flex flex-col items-center gap-2 max-w-xs">
+        <!-- CENTRO: CASO 1 - AGUARDANDO JOGADORES (MENOS DE 2) -->
+        <div id="waitingPlayersAlert" class="z-20 mt-2 bg-slate-900/95 border border-amber-500/50 p-4 rounded-3xl text-center shadow-2xl flex flex-col items-center gap-2 max-w-xs">
           <div id="tableQrCode" class="bg-white p-2 rounded-2xl shadow-inner flex items-center justify-center min-w-[130px] min-h-[130px]"></div>
           <div class="text-center">
-            <p class="text-white font-extrabold text-sm">Aponte a câmera para entrar</p>
+            <p id="tableWaitText" class="text-white font-extrabold text-sm">Aponte a câmera para entrar</p>
             <p id="tableUrlText" class="text-amber-400 font-mono text-[11px] font-bold mt-0.5 truncate max-w-[220px]">Carregando...</p>
           </div>
+        </div>
+
+        <!-- CENTRO: CASO 2 - 2 OU MAIS JOGADORES PRONTOS NO LOBBY (BOTÃO GIGANTE COMEÇAR) -->
+        <div id="lobbyReadyCenter" class="hidden z-20 flex flex-col items-center gap-3 bg-slate-950/95 border-2 border-emerald-500/80 px-8 py-5 rounded-3xl shadow-2xl backdrop-blur-md">
+          <div class="flex items-center gap-2 text-emerald-400 font-extrabold text-xs uppercase tracking-widest">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+            <span id="readyPlayersCount">2 JOGADORES PRONTOS</span>
+          </div>
+
+          <button onclick="startHand()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xl px-8 py-4 rounded-2xl shadow-xl shadow-emerald-500/40 transition active:scale-95 flex items-center gap-3 cursor-pointer animate-pulse">
+            <i data-lucide="play" class="w-7 h-7"></i> COMEÇAR PARTIDA
+          </button>
+
+          <p class="text-[11px] text-slate-300">Toque aqui ou aperte <strong>Iniciar</strong> direto pelo celular!</p>
         </div>
 
       </div>
@@ -397,6 +422,9 @@
       };
       streetBadge.innerText = streetMap[state.state] || state.state;
 
+      // Atualizar Guia de Cartas Físicas
+      updatePhysicalDirector(state);
+
       // Atualizar Cartas Comunitárias Visuais
       updateCommunityCards(state.state);
 
@@ -415,24 +443,39 @@
         currentBetInfo.classList.add('hidden');
       }
 
-      // Renderizar Jogadores ao redor da mesa oval
+      // Renderizar Jogadores ao redor da mesa oval com posições balanceadas
       renderPlayersAroundTable(state.players);
 
       // Atualizar Log de Ações
       renderActionLog(state.actionLog);
 
-      // QR Code central quando aguardando jogadores
+      // CENTRO DA MESA: Alternar entre Espera QR Code, Botão Iniciar e Jogo em Andamento
       const waitingAlert = document.getElementById('waitingPlayersAlert');
-      if (state.players.length < 2 || state.state === 'LOBBY') {
-        waitingAlert.classList.remove('hidden');
+      const lobbyReady = document.getElementById('lobbyReadyCenter');
+      const communityCards = document.getElementById('communityCardsContainer');
+      const potBox = document.getElementById('potContainer');
+
+      if (state.state === 'LOBBY') {
+        communityCards.classList.add('opacity-30');
+        if (state.players.length >= 2) {
+          waitingAlert.classList.add('hidden');
+          lobbyReady.classList.remove('hidden');
+          document.getElementById('readyPlayersCount').innerText = `${state.players.length} JOGADORES PRONTOS`;
+        } else {
+          waitingAlert.classList.remove('hidden');
+          lobbyReady.classList.add('hidden');
+          document.getElementById('tableWaitText').innerText = `Aguardando amigos... (${state.players.length}/2)`;
+        }
       } else {
+        communityCards.classList.remove('opacity-30');
         waitingAlert.classList.add('hidden');
+        lobbyReady.classList.add('hidden');
       }
 
       // Banner de vencedor
       const winnerBanner = document.getElementById('winnerBanner');
       if (state.state === 'HAND_OVER' && state.winners && state.winners.length > 0) {
-        const names = state.winners.map(w => `${w.name} (+${w.amount})`).join(', ');
+        const names = state.winners.map(w => `${w.name} (+${w.amount} fichas)`).join(', ');
         document.getElementById('winnerText').innerText = `${names}`;
         winnerBanner.classList.remove('scale-0');
         winnerBanner.classList.add('scale-100');
@@ -451,6 +494,34 @@
       }
     }
 
+    // Guia das cartas físicas na TV
+    function updatePhysicalDirector(state) {
+      const banner = document.getElementById('tvPhysicalDirector');
+      const text = document.getElementById('tvPhysicalText');
+
+      if (state.state === 'LOBBY') {
+        banner.classList.add('hidden');
+        return;
+      }
+
+      banner.classList.remove('hidden');
+      const dealer = state.players[state.dealerIndex] || { name: 'Dealer' };
+
+      if (state.state === 'PREFLOP') {
+        text.innerText = `Dealer ${dealer.name}: Embaralhe o baralho e dê 2 cartas fechadas para cada jogador.`;
+      } else if (state.state === 'FLOP') {
+        text.innerText = `Apostas pagas! Dealer ${dealer.name}: Queime 1 carta e abra o FLOP (3 cartas na mesa).`;
+      } else if (state.state === 'TURN') {
+        text.innerText = `Apostas pagas! Dealer ${dealer.name}: Queime 1 carta e abra o TURN (4ª carta na mesa).`;
+      } else if (state.state === 'RIVER') {
+        text.innerText = `Apostas pagas! Dealer ${dealer.name}: Queime 1 carta e abra o RIVER (5ª carta na mesa).`;
+      } else if (state.state === 'SHOWDOWN') {
+        text.innerText = 'SHOWDOWN: Mostrem as cartas físicas na mesa! Decidam quem venceu a rodada.';
+      } else if (state.state === 'HAND_OVER') {
+        text.innerText = 'Pote entregue! Embaralhem o baralho para a próxima mão.';
+      }
+    }
+
     // Atualiza o brilho das cartas comunitárias físicas
     function updateCommunityCards(state) {
       const flopActive = ['FLOP', 'TURN', 'RIVER', 'SHOWDOWN'].includes(state);
@@ -460,24 +531,24 @@
       ['cardFlop1', 'cardFlop2', 'cardFlop3'].forEach(id => {
         const el = document.getElementById(id);
         if (flopActive) {
-          el.className = 'w-12 h-16 rounded-xl bg-emerald-950/90 border-2 border-emerald-400 flex flex-col items-center justify-center text-[10px] font-black text-emerald-300 shadow-lg shadow-emerald-900/50 scale-105';
+          el.className = 'w-12 h-16 rounded-xl bg-emerald-950/90 border-2 border-emerald-400 flex flex-col items-center justify-center text-[10px] font-black text-emerald-300 shadow-lg shadow-emerald-900/50 scale-105 transition-all';
         } else {
-          el.className = 'w-12 h-16 rounded-xl bg-slate-950/80 border-2 border-slate-800 flex flex-col items-center justify-center text-[10px] font-black text-slate-600 shadow-md';
+          el.className = 'w-12 h-16 rounded-xl bg-slate-950/80 border-2 border-slate-800 flex flex-col items-center justify-center text-[10px] font-black text-slate-600 shadow-md transition-all';
         }
       });
 
       const cardTurn = document.getElementById('cardTurn');
       if (turnActive) {
-        cardTurn.className = 'w-12 h-16 rounded-xl bg-emerald-950/90 border-2 border-emerald-400 flex flex-col items-center justify-center text-[10px] font-black text-emerald-300 shadow-lg shadow-emerald-900/50 scale-105';
+        cardTurn.className = 'w-12 h-16 rounded-xl bg-emerald-950/90 border-2 border-emerald-400 flex flex-col items-center justify-center text-[10px] font-black text-emerald-300 shadow-lg shadow-emerald-900/50 scale-105 transition-all';
       } else {
-        cardTurn.className = 'w-12 h-16 rounded-xl bg-slate-950/80 border-2 border-slate-800 flex flex-col items-center justify-center text-[10px] font-black text-slate-600 shadow-md';
+        cardTurn.className = 'w-12 h-16 rounded-xl bg-slate-950/80 border-2 border-slate-800 flex flex-col items-center justify-center text-[10px] font-black text-slate-600 shadow-md transition-all';
       }
 
       const cardRiver = document.getElementById('cardRiver');
       if (riverActive) {
-        cardRiver.className = 'w-12 h-16 rounded-xl bg-emerald-950/90 border-2 border-emerald-400 flex flex-col items-center justify-center text-[10px] font-black text-emerald-300 shadow-lg shadow-emerald-900/50 scale-105';
+        cardRiver.className = 'w-12 h-16 rounded-xl bg-emerald-950/90 border-2 border-emerald-400 flex flex-col items-center justify-center text-[10px] font-black text-emerald-300 shadow-lg shadow-emerald-900/50 scale-105 transition-all';
       } else {
-        cardRiver.className = 'w-12 h-16 rounded-xl bg-slate-950/80 border-2 border-slate-800 flex flex-col items-center justify-center text-[10px] font-black text-slate-600 shadow-md';
+        cardRiver.className = 'w-12 h-16 rounded-xl bg-slate-950/80 border-2 border-slate-800 flex flex-col items-center justify-center text-[10px] font-black text-slate-600 shadow-md transition-all';
       }
     }
 
@@ -520,7 +591,7 @@
       }
     }
 
-    // Calcula posições em elipse ao redor da mesa
+    // Posicionamento inteligente dos jogadores na mesa oval (Broadcast Heads-Up)
     function renderPlayersAroundTable(players) {
       const container = document.getElementById('playersContainer');
       container.innerHTML = '';
@@ -528,15 +599,33 @@
       if (!players || players.length === 0) return;
 
       const total = players.length;
-      const rx = 44;
-      const ry = 42;
-      const cx = 50;
-      const cy = 50;
 
+      // Posições balanceadas para não colidir com o centro da mesa
       players.forEach((p, index) => {
-        const angle = (index / total) * 2 * Math.PI + Math.PI / 2;
-        const left = cx + rx * Math.cos(angle);
-        const top = cy + ry * Math.sin(angle);
+        let left = 50;
+        let top = 50;
+
+        if (total === 2) {
+          // No Heads-Up (2 jogadores): Posiciona um à esquerda e um à direita
+          if (index === 0) { left = 14; top = 50; }
+          else { left = 86; top = 50; }
+        } else if (total === 3) {
+          if (index === 0) { left = 50; top = 84; }
+          else if (index === 1) { left = 20; top = 32; }
+          else { left = 80; top = 32; }
+        } else if (total === 4) {
+          if (index === 0) { left = 50; top = 84; }
+          else if (index === 1) { left = 14; top = 50; }
+          else if (index === 2) { left = 50; top = 16; }
+          else { left = 86; top = 50; }
+        } else {
+          // Elipse com margens seguras para 5+ jogadores
+          const rx = 40;
+          const ry = 36;
+          const angle = (index / total) * 2 * Math.PI + Math.PI / 2;
+          left = 50 + rx * Math.cos(angle);
+          top = 50 + ry * Math.sin(angle);
+        }
 
         const seat = document.createElement('div');
         seat.className = `player-seat pointer-events-auto absolute flex flex-col items-center -translate-x-1/2 -translate-y-1/2 ${p.isTurn ? 'is-turn' : ''} ${p.folded ? 'is-folded' : ''}`;
@@ -544,20 +633,20 @@
         seat.style.top = `${top}%`;
 
         let badgeHtml = '';
-        if (p.isDealer) badgeHtml = `<span class="badge-dealer text-[10px] w-5 h-5 rounded-full flex items-center justify-center absolute -top-1 -right-1 z-10">D</span>`;
-        else if (p.isSmallBlind) badgeHtml = `<span class="badge-sb text-[9px] w-5 h-5 rounded-full flex items-center justify-center absolute -top-1 -right-1 z-10">SB</span>`;
-        else if (p.isBigBlind) badgeHtml = `<span class="badge-bb text-[9px] w-5 h-5 rounded-full flex items-center justify-center absolute -top-1 -right-1 z-10">BB</span>`;
+        if (p.isDealer) badgeHtml = `<span class="badge-dealer text-[10px] w-5 h-5 rounded-full flex items-center justify-center absolute -top-1 -right-1 z-10 shadow">D</span>`;
+        else if (p.isSmallBlind) badgeHtml = `<span class="badge-sb text-[9px] w-5 h-5 rounded-full flex items-center justify-center absolute -top-1 -right-1 z-10 shadow">SB</span>`;
+        else if (p.isBigBlind) badgeHtml = `<span class="badge-bb text-[9px] w-5 h-5 rounded-full flex items-center justify-center absolute -top-1 -right-1 z-10 shadow">BB</span>`;
 
         seat.innerHTML = `
           <div class="relative">
             ${badgeHtml}
-            <div class="avatar-ring w-14 h-14 rounded-full flex items-center justify-center text-white font-extrabold text-base shadow-xl border-2 border-slate-700" style="background-color: ${p.avatarColor}">
+            <div class="avatar-ring w-14 h-14 rounded-full flex items-center justify-center text-white font-extrabold text-base shadow-xl border-2 border-slate-700" style="background-color: ${p.avatarColor || '#f59e0b'}">
               ${p.name.substring(0, 2).toUpperCase()}
             </div>
             ${p.isAllIn ? '<span class="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow">ALL-IN</span>' : ''}
           </div>
 
-          <div class="mt-1 bg-slate-950/90 border border-slate-800 rounded-xl px-2.5 py-1 text-center shadow-lg min-w-[90px]">
+          <div class="mt-1 bg-slate-950/95 border border-slate-800 rounded-xl px-2.5 py-1 text-center shadow-lg min-w-[90px]">
             <p class="text-xs font-bold text-slate-100 truncate max-w-[100px]">${p.name}</p>
             <div class="flex items-center justify-center gap-1 text-amber-400 font-extrabold text-xs">
               <span class="chip-token chip-gold scale-75">♣</span>

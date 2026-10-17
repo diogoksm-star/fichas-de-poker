@@ -1,13 +1,13 @@
-// poker-engine.js - Mecânica de Fichas e Apostas de Poker Texas Hold'em
+// poker-engine.js - Motor de Poker Texas Hold'em estilo Zynga / Profissional
 class PokerRoom {
   constructor(roomId, options = {}) {
     this.roomId = roomId;
     this.startingChips = options.startingChips || 100;
     this.smallBlind = options.smallBlind || 1;
     this.bigBlind = options.bigBlind || 2;
-    this.turnTimeLimit = options.turnTimeLimit || 30; // Segundos por turno
+    this.turnTimeLimit = options.turnTimeLimit !== undefined ? options.turnTimeLimit : 30; // Segundos por turno
     
-    this.players = []; // { id, name, socketId, chips, currentBet, totalHandBet, folded, isAllIn, isSittingOut, hasActed, isHost }
+    this.players = []; // { id, name, socketId, chips, currentBet, totalHandBet, folded, isAllIn, isSittingOut, hasActed, isHost, avatarColor }
     this.state = 'LOBBY'; // LOBBY, PREFLOP, FLOP, TURN, RIVER, SHOWDOWN, HAND_OVER
     
     this.pot = 0; // Pote principal acumulado
@@ -35,16 +35,19 @@ class PokerRoom {
   addPlayer(id, name, socketId, isHost = false) {
     let player = this.players.find(p => p.id === id);
     if (player) {
-      player.socketId = socketId;
+      player.socketId = socketId || player.socketId;
       player.name = name || player.name;
-      this.log(`${player.name} reconectou à mesa.`);
+      if (isHost) player.isHost = true;
+      this.log(`${player.name} conectou à mesa.`);
       return player;
     }
 
+    const assignedHost = isHost || this.players.length === 0;
+
     player = {
       id: id || 'p_' + Math.random().toString(36).substring(2, 9),
-      name: name.trim() || `Jogador ${this.players.length + 1}`,
-      socketId,
+      name: (name && name.trim()) ? name.trim() : `Jogador ${this.players.length + 1}`,
+      socketId: socketId || null,
       chips: this.startingChips,
       currentBet: 0,
       totalHandBet: 0,
@@ -52,7 +55,7 @@ class PokerRoom {
       isAllIn: false,
       isSittingOut: false,
       hasActed: false,
-      isHost: isHost || this.players.length === 0,
+      isHost: assignedHost,
       avatarColor: this.getRandomColor()
     };
 
@@ -114,6 +117,7 @@ class PokerRoom {
 
   getNextActiveIndex(fromIndex) {
     const count = this.players.length;
+    if (count === 0) return 0;
     for (let i = 1; i <= count; i++) {
       const idx = (fromIndex + i) % count;
       const p = this.players[idx];
@@ -126,6 +130,7 @@ class PokerRoom {
 
   getNextInHandIndex(fromIndex) {
     const count = this.players.length;
+    if (count === 0) return -1;
     for (let i = 1; i <= count; i++) {
       const idx = (fromIndex + i) % count;
       const p = this.players[idx];
@@ -139,7 +144,7 @@ class PokerRoom {
   startNewHand() {
     const active = this.getActivePlayers();
     if (active.length < 2) {
-      this.log('Não há jogadores suficientes com fichas para iniciar uma mão.');
+      this.log('Mínimo de 2 jogadores com fichas para iniciar.');
       return false;
     }
 
@@ -150,7 +155,7 @@ class PokerRoom {
     this.minRaise = this.bigBlind;
     this.winners = [];
 
-    // Reset estado dos jogadores
+    // Reset estado dos jogadores para a nova mão
     this.players.forEach(p => {
       p.currentBet = 0;
       p.totalHandBet = 0;
@@ -159,18 +164,21 @@ class PokerRoom {
       p.hasActed = false;
     });
 
-    // Avança dealer
+    // Avança dealer no sentido horário
     if (this.handNumber > 1) {
       this.dealerIndex = this.getNextActiveIndex(this.dealerIndex);
     } else {
       this.dealerIndex = 0;
     }
 
-    // Calcula Small Blind e Big Blind
+    // Regras de Blinds (Heads-Up vs Mesa Cheia)
     if (this.players.length === 2) {
+      // No Poker Heads-up (2 jogadores):
+      // Dealer é o Small Blind e fala primeiro no pré-flop!
       this.sbIndex = this.dealerIndex;
       this.bbIndex = this.getNextActiveIndex(this.sbIndex);
     } else {
+      // Com 3 ou mais jogadores:
       this.sbIndex = this.getNextActiveIndex(this.dealerIndex);
       this.bbIndex = this.getNextActiveIndex(this.sbIndex);
     }
@@ -182,7 +190,7 @@ class PokerRoom {
     sbPlayer.currentBet = sbAmount;
     sbPlayer.totalHandBet = sbAmount;
     if (sbPlayer.chips === 0) sbPlayer.isAllIn = true;
-    this.log(`${sbPlayer.name} postou o Small Blind (${sbAmount} fichas).`);
+    this.log(`${sbPlayer.name} postou Small Blind (${sbAmount} fichas).`);
 
     // Debitar Big Blind
     const bbPlayer = this.players[this.bbIndex];
@@ -191,12 +199,18 @@ class PokerRoom {
     bbPlayer.currentBet = bbAmount;
     bbPlayer.totalHandBet = bbAmount;
     if (bbPlayer.chips === 0) bbPlayer.isAllIn = true;
-    this.log(`${bbPlayer.name} postou o Big Blind (${bbAmount} fichas).`);
+    this.log(`${bbPlayer.name} postou Big Blind (${bbAmount} fichas).`);
 
     this.currentMaxBet = Math.max(sbAmount, bbAmount);
 
-    // Primeiro a agir no pré-flop é quem está à esquerda do BB (UTG)
-    this.currentTurnIndex = this.getNextInHandIndex(this.bbIndex);
+    // Primeiro a agir no pré-flop:
+    // No Heads-up: Dealer (SB). Na mesa cheia: jogador à esquerda do BB (UTG)
+    if (this.players.length === 2) {
+      this.currentTurnIndex = this.sbIndex;
+    } else {
+      this.currentTurnIndex = this.getNextInHandIndex(this.bbIndex);
+    }
+
     this.turnStartTime = Date.now();
 
     if (this.currentTurnIndex === -1) {
@@ -207,7 +221,7 @@ class PokerRoom {
     return true;
   }
 
-  // Verifica timer do turno atual e toma ação se expirou
+  // Timer de ação automático por inatividade
   checkTimer() {
     if (this.state === 'LOBBY' || this.state === 'SHOWDOWN' || this.state === 'HAND_OVER') return false;
     if (this.currentTurnIndex === -1 || this.turnTimeLimit <= 0) return false;
@@ -232,7 +246,7 @@ class PokerRoom {
 
     const playerIndex = this.players.indexOf(player);
     if (this.currentTurnIndex !== playerIndex) {
-      return { success: false, message: 'Não é a sua vez!' };
+      return { success: false, message: 'Não é a sua vez de jogar!' };
     }
 
     amount = Number(amount) || 0;
@@ -246,7 +260,7 @@ class PokerRoom {
     } 
     else if (action === 'check') {
       if (callCost > 0) {
-        return { success: false, message: `Não pode dar mesa/check. Aposta pendente de ${callCost} fichas.` };
+        return { success: false, message: `Não pode dar Check. Há aposta de ${callCost} fichas pendente.` };
       }
       player.hasActed = true;
       this.log(`${player.name} deu CHECK (mesa).`);
@@ -266,7 +280,7 @@ class PokerRoom {
 
         if (player.chips === 0) {
           player.isAllIn = true;
-          this.log(`${player.name} pagou ${payAmount} fichas e está ALL-IN!`);
+          this.log(`${player.name} pagou ${payAmount} e está em ALL-IN!`);
           this.lastAction = { player: player.name, action: 'ALL-IN (CALL)', amount: payAmount };
         } else {
           this.log(`${player.name} pagou (CALL) ${payAmount} fichas.`);
@@ -275,8 +289,8 @@ class PokerRoom {
       }
     } 
     else if (action === 'bet' || action === 'raise') {
-      if (amount <= this.currentMaxBet && amount < player.chips + player.currentBet) {
-        return { success: false, message: `A aposta deve ser maior que a aposta atual (${this.currentMaxBet}).` };
+      if (amount <= this.currentMaxBet && amount < (player.chips + player.currentBet)) {
+        return { success: false, message: `A aposta deve ser maior que a atual (${this.currentMaxBet}).` };
       }
 
       const additionalChips = amount - player.currentBet;
@@ -299,7 +313,7 @@ class PokerRoom {
 
       if (player.chips === 0) {
         player.isAllIn = true;
-        this.log(`${player.name} foi ALL-IN de ${amount} fichas!`);
+        this.log(`${player.name} foi ALL-IN com ${amount} fichas!`);
         this.lastAction = { player: player.name, action: 'ALL-IN', amount };
       } else {
         const actionLabel = isRaise ? 'RAISE' : 'BET';
@@ -307,7 +321,7 @@ class PokerRoom {
         this.lastAction = { player: player.name, action: actionLabel, amount };
       }
 
-      // Quando alguém aumenta, todos os outros que ainda estão na mão precisam agir novamente
+      // Reabre aposta para outros jogadores ativos que não estejam all-in
       this.players.forEach(p => {
         if (p.id !== player.id && !p.folded && !p.isAllIn) {
           p.hasActed = false;
@@ -315,14 +329,14 @@ class PokerRoom {
       });
     }
 
-    // Verificar se sobrou apenas 1 jogador na mão (todos os outros deram fold)
+    // Verificar se sobrou apenas 1 jogador ativo (vitória imediata por fold)
     const inHand = this.getInHandPlayers();
     if (inHand.length === 1) {
       this.awardSingleWinner(inHand[0]);
       return { success: true };
     }
 
-    // Verifica se a rodada de apostas (street) terminou
+    // Verificar se a rodada de apostas (street) terminou
     if (this.isStreetComplete()) {
       this.advanceStreet();
     } else {
@@ -344,6 +358,7 @@ class PokerRoom {
       return true; // Todos que sobraram estão all-in
     }
 
+    // Se só tem 1 jogador capaz de apostar e todos os outros já igualaram ou estão all-in
     for (const p of eligibleToAct) {
       if (!p.hasActed) return false;
       if (p.currentBet !== this.currentMaxBet) return false;
@@ -372,16 +387,16 @@ class PokerRoom {
 
     if (this.state === 'PREFLOP') {
       this.state = 'FLOP';
-      this.log('--- ABRINDO O FLOP (3 CARTAS NA MESA REAL) ---');
+      this.log('🃏 APOSTAS FECHADAS! Abram o FLOP (3 cartas físicas na mesa).');
     } else if (this.state === 'FLOP') {
       this.state = 'TURN';
-      this.log('--- ABRINDO O TURN (4ª CARTA NA MESA REAL) ---');
+      this.log('🃏 APOSTAS FECHADAS! Abram o TURN (4ª carta física na mesa).');
     } else if (this.state === 'TURN') {
       this.state = 'RIVER';
-      this.log('--- ABRINDO O RIVER (5ª CARTA NA MESA REAL) ---');
+      this.log('🃏 APOSTAS FECHADAS! Abram o RIVER (5ª carta física na mesa).');
     } else if (this.state === 'RIVER') {
       this.state = 'SHOWDOWN';
-      this.log('--- SHOWDOWN: MOSTREM AS CARTAS FÍSICAS NA MESA! ---');
+      this.log('🏆 SHOWDOWN! Mostrem as cartas físicas na mesa.');
       this.currentTurnIndex = -1;
       return;
     }
@@ -389,12 +404,11 @@ class PokerRoom {
     // Se todos ou quase todos estão all-in
     if (canAct.length < 2) {
       this.log('Jogadores em All-In! Revelem as cartas físicas até o Showdown.');
-      // Permite avançar até o Showdown sem travar
       this.currentTurnIndex = -1;
       return;
     }
 
-    // A ação pós-flop sempre começa à esquerda do Dealer
+    // Ação pós-flop começa à esquerda do Dealer
     this.currentTurnIndex = this.getNextInHandIndex(this.dealerIndex);
     this.turnStartTime = Date.now();
   }
@@ -407,7 +421,7 @@ class PokerRoom {
 
     this.collectBetsIntoPot();
     this.state = streetName;
-    this.log(`Host alterou a fase da mesa manualmente para: ${streetName}`);
+    this.log(`Fase alterada para: ${streetName}`);
 
     if (streetName === 'SHOWDOWN') {
       this.currentTurnIndex = -1;
@@ -415,9 +429,11 @@ class PokerRoom {
       const inHand = this.getInHandPlayers();
       const canAct = inHand.filter(p => !p.isAllIn);
       if (canAct.length >= 2) {
-        this.currentTurnIndex = streetName === 'PREFLOP' 
-          ? this.getNextInHandIndex(this.bbIndex)
-          : this.getNextInHandIndex(this.dealerIndex);
+        if (streetName === 'PREFLOP') {
+          this.currentTurnIndex = this.players.length === 2 ? this.sbIndex : this.getNextInHandIndex(this.bbIndex);
+        } else {
+          this.currentTurnIndex = this.getNextInHandIndex(this.dealerIndex);
+        }
         this.turnStartTime = Date.now();
       } else {
         this.currentTurnIndex = -1;
@@ -430,13 +446,12 @@ class PokerRoom {
     this.collectBetsIntoPot();
     winner.chips += this.pot;
     this.winners = [{ id: winner.id, name: winner.name, amount: this.pot }];
-    this.log(`🏆 ${winner.name} venceu o pote de ${this.pot} fichas (todos os outros deram fold)!`);
+    this.log(`🏆 ${winner.name} venceu o pote de ${this.pot} fichas (todos deram fold)!`);
     this.pot = 0;
     this.state = 'HAND_OVER';
     this.currentTurnIndex = -1;
   }
 
-  // Pode ser chamado a qualquer momento pelo Host para decidir o vencedor do pote!
   resolveShowdown(winnerIds) {
     if (!winnerIds || winnerIds.length === 0) return false;
     this.collectBetsIntoPot();
@@ -487,7 +502,7 @@ class PokerRoom {
     this.pot = 0;
     this.state = 'LOBBY';
     this.currentTurnIndex = -1;
-    this.log('A mão foi cancelada pelo Host e todas as fichas foram devolvidas.');
+    this.log('A mão foi reiniciada pelo Host e as fichas foram devolvidas.');
   }
 
   getState() {

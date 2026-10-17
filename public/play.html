@@ -33,12 +33,12 @@
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Código da Mesa:</label>
-          <input type="text" id="inputRoomId" value="MESA-1" uppercase
-            class="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-2.5 text-amber-400 font-mono font-bold text-base focus:outline-none focus:border-amber-500 transition">
+          <input type="text" id="inputRoomId" value="MESA-1"
+            class="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-2.5 text-amber-400 font-mono font-bold text-base focus:outline-none focus:border-amber-500 transition uppercase">
         </div>
 
         <button onclick="handleJoin()" class="w-full bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-black text-lg py-4 rounded-2xl shadow-lg shadow-amber-500/30 transition mt-2">
-          Entrar no Jogo
+          Entrar na Mesa
         </button>
       </div>
     </div>
@@ -50,7 +50,7 @@
     <!-- TOPO: Identificação e Rebuy -->
     <header class="flex items-center justify-between bg-slate-900/90 border border-slate-800/80 rounded-2xl px-4 py-2.5 shadow-md">
       <div class="flex items-center gap-2.5">
-        <div id="myAvatar" class="w-8 h-8 rounded-full bg-amber-500 text-slate-950 font-black text-xs flex items-center justify-center">
+        <div id="myAvatar" class="w-9 h-9 rounded-full bg-amber-500 text-slate-950 font-black text-xs flex items-center justify-center shadow">
           P
         </div>
         <div>
@@ -60,17 +60,22 @@
       </div>
 
       <div class="flex items-center gap-2">
-        <button onclick="requestRebuy()" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-amber-400 text-xs font-bold px-3 py-1.5 rounded-xl border border-slate-700 flex items-center gap-1 shadow">
-          <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> +100 Fichas
+        <!-- Botão Decidir Vencedor Sempre Acessível no Celular -->
+        <button onclick="openMobileShowdown()" id="btnMobileWinnerTop" class="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-bold px-2.5 py-1.5 rounded-xl border border-amber-500/40 flex items-center gap-1 shadow">
+          <i data-lucide="trophy" class="w-3.5 h-3.5"></i> Vencedor
+        </button>
+
+        <button onclick="requestRebuy()" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-amber-400 text-xs font-bold px-2.5 py-1.5 rounded-xl border border-slate-700 flex items-center gap-1 shadow">
+          <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> +100
         </button>
       </div>
     </header>
 
-    <!-- CARTEIRA DE FICHAS (DESTAQUE PRINCIPAL) -->
-    <div class="my-3 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border-2 border-amber-500/40 rounded-3xl p-5 shadow-2xl relative overflow-hidden">
+    <!-- CARTEIRA DE FICHAS (DESTAQUE PRINCIPAL ESTILO ZYNGA) -->
+    <div class="my-2.5 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border-2 border-amber-500/40 rounded-3xl p-4 shadow-2xl relative overflow-hidden">
       <div class="absolute -right-4 -bottom-4 w-28 h-28 bg-amber-500/10 rounded-full blur-2xl pointer-events-none"></div>
 
-      <div class="flex items-center justify-between text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">
+      <div class="flex items-center justify-between text-xs text-slate-400 uppercase font-bold tracking-wider mb-0.5">
         <span>Suas Fichas Disponíveis</span>
         <span class="chip-token chip-gold scale-90">♦</span>
       </div>
@@ -83,7 +88,7 @@
       </div>
 
       <!-- Resumo rápido da rodada -->
-      <div class="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-300">
+      <div class="mt-3 pt-2.5 border-t border-slate-800 flex items-center justify-between text-xs text-slate-300">
         <div>
           <span class="text-slate-400">Sua aposta na mão:</span>
           <span id="myCurrentBetDisplay" class="font-bold text-white ml-1">0</span>
@@ -95,52 +100,99 @@
       </div>
     </div>
 
-    <!-- BANNER DE STATUS / VEZ DE JOGAR -->
-    <div id="turnStatusCard" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 text-center mb-3 shadow-md transition-all">
+    <!-- PAINEL DO LOBBY: EXIBIDO QUANDO A MESA ESTÁ EM ESPERA -->
+    <div id="lobbyControlCard" class="bg-slate-900/95 border-2 border-emerald-500/40 rounded-3xl p-4 text-center my-2 shadow-2xl transition-all">
+      <div class="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center mb-2 border border-emerald-500/30">
+        <i data-lucide="users" class="w-6 h-6"></i>
+      </div>
+      <h3 id="lobbyTitle" class="text-lg font-black text-white">Lobby de Espera</h3>
+      <p id="lobbySubtitle" class="text-slate-300 text-xs mt-1 mb-3">Aguardando amigos entrarem pelo celular...</p>
+
+      <!-- Lista de jogadores sentados -->
+      <div id="lobbyPlayersChips" class="flex flex-wrap items-center justify-center gap-1.5 mb-4">
+        <!-- Renderizado dinamicamente -->
+      </div>
+
+      <!-- BOTÃO INICIAR PARTIDA NO CELULAR -->
+      <button id="btnStartGameMobile" onclick="triggerStartHand()" class="w-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black text-base py-3.5 rounded-2xl shadow-xl shadow-emerald-500/30 transition flex items-center justify-center gap-2">
+        <i data-lucide="play" class="w-5 h-5"></i>
+        <span id="btnStartGameText">Iniciar Partida (2 Jogadores Prontos)</span>
+      </button>
+
+      <button onclick="copyRoomLink()" class="mt-2 text-[11px] text-slate-400 hover:text-white flex items-center justify-center gap-1 mx-auto">
+        <i data-lucide="share-2" class="w-3.5 h-3.5"></i> Copiar link para convidar amigos
+      </button>
+    </div>
+
+    <!-- GUIA DAS CARTAS FÍSICAS (A CONEXÃO FÍSICO-DIGITAL) -->
+    <div id="physicalAssistantCard" class="bg-gradient-to-r from-amber-950/40 via-slate-900 to-amber-950/40 border border-amber-500/30 rounded-2xl p-3 mb-2 shadow-lg hidden">
+      <div class="flex items-start gap-2.5">
+        <div class="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center flex-shrink-0 mt-0.5 border border-amber-500/30">
+          🃏
+        </div>
+        <div class="text-left text-xs leading-snug">
+          <p id="physicalTitle" class="font-extrabold text-amber-300">Pré-Flop: Cartas na Mão</p>
+          <p id="physicalDesc" class="text-slate-300 text-[11px] mt-0.5">Dealer: Embaralhe o baralho e dê 2 cartas fechadas para cada jogador.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- BANNER DE STATUS / VEZ DE JOGAR COM TIMER DINÂMICO -->
+    <div id="turnStatusCard" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 text-center mb-2 shadow-md transition-all">
       <div id="waitingTurnBox" class="flex items-center justify-center gap-2 text-slate-300 text-xs font-semibold py-1">
         <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
         <span id="waitingMessage">Aguardando início da mão...</span>
         <span id="waitingTimerBadge" class="hidden text-amber-400 font-mono font-bold bg-slate-950 px-2 py-0.5 rounded-lg border border-slate-800 text-[11px]">30s</span>
       </div>
 
-      <div id="yourTurnBox" class="hidden py-1 text-emerald-400 font-black text-base uppercase tracking-wider flex items-center justify-center gap-2">
-        <i data-lucide="bell-ring" class="w-5 h-5 animate-bounce"></i>
-        <span>SUA VEZ!</span>
-        <span id="myTurnCountdown" class="text-white font-mono bg-emerald-950 border border-emerald-400/50 px-2.5 py-0.5 rounded-xl text-sm">30s</span>
+      <div id="yourTurnBox" class="hidden flex flex-col items-center justify-center gap-1 py-1">
+        <div class="text-emerald-400 font-black text-base uppercase tracking-wider flex items-center gap-2">
+          <i data-lucide="bell-ring" class="w-5 h-5 animate-bounce"></i>
+          <span>SUA VEZ DE JOGAR!</span>
+          <span id="myTurnCountdown" class="text-white font-mono bg-emerald-950 border border-emerald-400/50 px-2.5 py-0.5 rounded-xl text-sm">30s</span>
+        </div>
+        <!-- Barra de Progresso do Timer -->
+        <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1">
+          <div id="turnTimerProgressBar" class="bg-emerald-400 h-full w-full transition-all duration-1000"></div>
+        </div>
       </div>
     </div>
 
-    <!-- PAINEL DE AÇÕES DE POKER -->
+    <!-- PAINEL DE AÇÕES DE POKER (ESTILO ZYNGA POKER PROFISSIONAL) -->
     <div id="actionControlsPanel" class="space-y-2 opacity-40 pointer-events-none transition-all duration-200">
 
       <!-- FOLD e CHECK/CALL lado a lado -->
-      <div class="grid grid-cols-2 gap-2.5">
-        <button id="btnFold" onclick="doAction('fold')" class="btn-action bg-red-600/90 hover:bg-red-500 text-white font-extrabold text-base py-4 rounded-2xl shadow-lg shadow-red-950/40 flex flex-col items-center justify-center gap-0.5 border border-red-500/50">
+      <div class="grid grid-cols-2 gap-2">
+        <button id="btnFold" onclick="handleFoldClick()" class="btn-action bg-red-600 hover:bg-red-500 text-white font-black text-base py-3.5 rounded-2xl shadow-lg shadow-red-950/50 flex flex-col items-center justify-center gap-0.5 border border-red-400/50">
           <span>FOLD</span>
-          <span class="text-[10px] font-medium opacity-80">Desistir da Mão</span>
+          <span class="text-[10px] font-medium opacity-80">Desistir</span>
         </button>
 
-        <button id="btnCall" onclick="doCallOrCheck()" class="btn-action bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-base py-4 rounded-2xl shadow-lg shadow-amber-500/30 flex flex-col items-center justify-center gap-0.5 border border-amber-400">
+        <button id="btnCall" onclick="doCallOrCheck()" class="btn-action bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-base py-3.5 rounded-2xl shadow-lg shadow-amber-500/30 flex flex-col items-center justify-center gap-0.5 border border-amber-400">
           <span id="btnCallText">CHECK</span>
           <span id="btnCallSubText" class="text-[10px] font-bold opacity-90">Passar a vez</span>
         </button>
       </div>
 
-      <!-- BOTÃO E GAVETA DE APOSTA / RAISE -->
-      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3">
-        <!-- Atalhos rápidos de valor -->
-        <div class="grid grid-cols-4 gap-1.5 mb-2.5 text-xs font-bold">
-          <button onclick="setBetShortcut('min')" class="bg-slate-800 hover:bg-slate-700 py-1.5 rounded-lg text-slate-200 border border-slate-700 active:scale-95">Mínimo</button>
-          <button onclick="setBetShortcut('half')" class="bg-slate-800 hover:bg-slate-700 py-1.5 rounded-lg text-slate-200 border border-slate-700 active:scale-95">½ Pote</button>
-          <button onclick="setBetShortcut('pot')" class="bg-slate-800 hover:bg-slate-700 py-1.5 rounded-lg text-slate-200 border border-slate-700 active:scale-95">Pote</button>
-          <button onclick="setBetShortcut('allin')" class="bg-red-950/80 hover:bg-red-900 py-1.5 rounded-lg text-red-300 border border-red-700 active:scale-95">All-In</button>
+      <!-- BOTÃO E GAVETA DE APOSTA / RAISE (COM PRESETS RÁPIDOS) -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 shadow-inner">
+        <!-- Atalhos rápidos estilo Zynga: Min, 2x, 1/2 Pot, Pot, All-in -->
+        <div class="grid grid-cols-5 gap-1 mb-2.5 text-[11px] font-black">
+          <button onclick="setBetShortcut('min')" class="bg-slate-800 hover:bg-slate-700 py-1.5 rounded-lg text-slate-200 border border-slate-700 active:scale-95">MÍN</button>
+          <button onclick="setBetShortcut('2x')" class="bg-slate-800 hover:bg-slate-700 py-1.5 rounded-lg text-slate-200 border border-slate-700 active:scale-95">2X</button>
+          <button onclick="setBetShortcut('half')" class="bg-slate-800 hover:bg-slate-700 py-1.5 rounded-lg text-slate-200 border border-slate-700 active:scale-95">½ POTE</button>
+          <button onclick="setBetShortcut('pot')" class="bg-slate-800 hover:bg-slate-700 py-1.5 rounded-lg text-slate-200 border border-slate-700 active:scale-95">POTE</button>
+          <button onclick="setBetShortcut('allin')" class="bg-red-900/80 hover:bg-red-800 py-1.5 rounded-lg text-red-200 border border-red-600 active:scale-95">ALL-IN</button>
         </div>
 
-        <!-- Slider e Input de Apostas -->
-        <div class="flex items-center gap-3 mb-2.5">
-          <input type="range" id="betSlider" min="2" max="100" value="2" oninput="onSliderChange(this.value)" class="flex-1 accent-emerald-500 h-2 bg-slate-950 rounded-lg cursor-pointer">
-          <div class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-1 flex items-center min-w-[70px] justify-center">
-            <span id="betDisplayValue" class="text-emerald-400 font-extrabold text-lg">2</span>
+        <!-- Slider com botões de - e + para precisão -->
+        <div class="flex items-center gap-2 mb-2.5">
+          <button onclick="adjustBetStep(-1)" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-black text-base flex items-center justify-center border border-slate-700 active:scale-95">-</button>
+          <input type="range" id="betSlider" min="2" max="100" value="2" oninput="onSliderChange(this.value)" class="flex-1 accent-emerald-500 h-2.5 bg-slate-950 rounded-lg cursor-pointer">
+          <button onclick="adjustBetStep(1)" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-black text-base flex items-center justify-center border border-slate-700 active:scale-95">+</button>
+          
+          <div class="bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1 flex items-center min-w-[65px] justify-center">
+            <span id="betDisplayValue" class="text-emerald-400 font-black text-base">2</span>
           </div>
         </div>
 
@@ -152,14 +204,66 @@
 
     </div>
 
-    <!-- RODAPÉ: Status da Conexão e Outros Jogadores -->
-    <footer class="mt-3 text-center text-[11px] text-slate-500 flex items-center justify-between px-2">
-      <span id="playerConnectionText">Conectado na MESA-1</span>
-      <span id="streetIndicator" class="text-slate-400 font-semibold">Street: Aguardando</span>
+    <!-- BANNER DE MÃO ENCERRADA / PRÓXIMA MÃO NO CELULAR -->
+    <div id="handOverBannerMobile" class="hidden bg-slate-900 border-2 border-amber-500/60 rounded-3xl p-4 my-2 text-center shadow-2xl">
+      <div class="flex items-center justify-center gap-2 text-amber-400 font-black text-base mb-1">
+        <i data-lucide="trophy" class="w-5 h-5"></i>
+        <span>POTE ENTREGUE!</span>
+      </div>
+      <p id="handOverWinnerText" class="text-white font-extrabold text-sm mb-3">Vencedor</p>
+      <button onclick="triggerStartHand()" class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-base py-3 rounded-2xl shadow-lg transition active:scale-95 flex items-center justify-center gap-2">
+        <i data-lucide="play" class="w-5 h-5"></i> Iniciar Próxima Mão
+      </button>
+    </div>
+
+    <!-- RODAPÉ: Status da Conexão e Informações da Mesa -->
+    <footer class="mt-2 text-center text-[11px] text-slate-500 flex items-center justify-between px-1">
+      <span id="playerConnectionText">Mesa: MESA-1</span>
+      <span id="streetIndicator" class="text-slate-400 font-semibold">Fase: Lobby</span>
     </footer>
 
   </div>
 
+  <!-- MODAL: Showdown - Decidir Vencedor das Cartas Físicas DIRETO NO CELULAR -->
+  <div id="mobileShowdownModal" class="fixed inset-0 bg-slate-950/95 backdrop-blur-md flex items-center justify-center z-50 p-4 hidden">
+    <div class="bg-slate-900 border border-amber-500/50 rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center">
+      <div class="w-14 h-14 rounded-full bg-amber-500/20 text-amber-400 mx-auto flex items-center justify-center mb-3 border border-amber-500/30">
+        <i data-lucide="trophy" class="w-7 h-7"></i>
+      </div>
+      <h3 class="text-xl font-black text-white mb-1">Quem venceu a mão?</h3>
+      <p class="text-slate-300 text-xs mb-4">Olhem as cartas físicas na mesa real. Selecione quem teve o melhor jogo:</p>
+
+      <div id="mobileShowdownPlayersList" class="space-y-2 mb-5 max-h-56 overflow-y-auto pr-1"></div>
+
+      <div class="flex items-center gap-2">
+        <button onclick="closeMobileShowdown()" class="w-1/3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs py-3 rounded-xl transition">
+          Fechar
+        </button>
+        <button onclick="confirmMobileShowdownWinners()" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm py-3 rounded-xl shadow-lg shadow-amber-500/30 transition">
+          Entregar Pote
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE PROTEÇÃO DE FOLD ACIDENTAL -->
+  <div id="foldConfirmModal" class="fixed inset-0 bg-slate-950/90 backdrop-blur flex items-center justify-center z-50 p-4 hidden">
+    <div class="bg-slate-900 border border-slate-700 rounded-3xl p-6 max-w-xs w-full text-center shadow-2xl">
+      <i data-lucide="alert-triangle" class="w-10 h-10 text-amber-400 mx-auto mb-2"></i>
+      <h4 class="font-bold text-white text-base mb-1">Você pode passar (CHECK) de graça!</h4>
+      <p class="text-slate-400 text-xs mb-5">Não há apostas para pagar. Deseja mesmo desistir (FOLD) da mão?</p>
+      <div class="flex items-center gap-2">
+        <button onclick="doAction('check'); closeFoldConfirm();" class="flex-1 bg-emerald-600 text-white font-extrabold text-xs py-3 rounded-xl">
+          Dar CHECK (Grátis)
+        </button>
+        <button onclick="doAction('fold'); closeFoldConfirm();" class="bg-red-600/30 text-red-300 font-bold text-xs py-3 px-3 rounded-xl">
+          Dar FOLD
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPT DA LÓGICA MOBILE -->
   <script>
     const urlParams = new URLSearchParams(window.location.search);
     const initialRoom = (urlParams.get('room') || 'MESA-1').toUpperCase();
@@ -171,7 +275,6 @@
     let targetBetAmount = 2;
     let turnSoundPlayed = false;
 
-    // Configura sala no input
     document.getElementById('inputRoomId').value = currentRoomId;
 
     let socket = null;
@@ -208,7 +311,7 @@
       }
     }
 
-    // Polling contínuo para Nuvem/Vercel
+    // Polling contínuo de sincronização
     async function syncMobileState() {
       if (!currentRoomId || !myPlayerId) return;
       try {
@@ -217,9 +320,6 @@
           const state = await res.json();
           currentGameState = state;
           renderMobileState(state);
-          if (!isSocketConnected) {
-            document.getElementById('playerConnectionText').innerText = `Online (${currentRoomId} 🟢)`;
-          }
         }
       } catch (e) {}
     }
@@ -280,10 +380,6 @@
       });
     }
 
-    socket.on('actionError', (err) => {
-      alert(err.message);
-    });
-
     function updatePlayerInfo(player) {
       if (!player) return;
       document.getElementById('myNameDisplay').innerText = player.name;
@@ -291,9 +387,18 @@
       document.getElementById('myAvatar').style.backgroundColor = player.avatarColor || '#f59e0b';
     }
 
+    // Renderizar Interface Mobile
     function renderMobileState(state) {
+      if (!state) return;
+
       const me = state.players.find(p => p.id === myPlayerId);
-      if (!me) return;
+      if (!me) {
+        // Se ainda não estiver na lista (ex: recarregou), reconecta
+        if (myPlayerName && myPlayerId) {
+          autoJoin();
+        }
+        return;
+      }
 
       updatePlayerInfo(me);
 
@@ -301,8 +406,9 @@
       document.getElementById('myChipsDisplay').innerText = me.chips;
       document.getElementById('myCurrentBetDisplay').innerText = me.currentBet;
       document.getElementById('tablePotDisplay').innerText = state.pot;
+
       const streetMap = {
-        'LOBBY': 'Aguardando',
+        'LOBBY': 'Lobby • Aguardando',
         'PREFLOP': 'Pré-Flop (Cartas na mão)',
         'FLOP': 'Flop (3 cartas na mesa)',
         'TURN': 'Turn (4ª carta na mesa)',
@@ -320,16 +426,74 @@
       else if (me.isBigBlind) roleBadge.innerText = 'Big Blind (BB)';
       else roleBadge.innerText = 'Jogador';
 
-      // Status de Vez
-      const isMyTurn = (state.currentTurnPlayerId === myPlayerId) && !me.folded && !me.isAllIn && state.state !== 'SHOWDOWN' && state.state !== 'HAND_OVER';
+      // 1. GERENCIAR ESTADO DO LOBBY
+      const lobbyCard = document.getElementById('lobbyControlCard');
+      const physicalCard = document.getElementById('physicalAssistantCard');
+      const handOverBanner = document.getElementById('handOverBannerMobile');
+
+      if (state.state === 'LOBBY') {
+        lobbyCard.classList.remove('hidden');
+        physicalCard.classList.add('hidden');
+        handOverBanner.classList.add('hidden');
+
+        // Renderizar quem está sentado
+        const lobbyChips = document.getElementById('lobbyPlayersChips');
+        lobbyChips.innerHTML = state.players.map(p => `
+          <div class="flex items-center gap-1.5 bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-full text-xs">
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <span class="font-bold text-slate-200">${p.name}</span>
+            <span class="text-amber-400 font-extrabold text-[11px]">${p.chips}f</span>
+          </div>
+        `).join('');
+
+        const btnStart = document.getElementById('btnStartGameMobile');
+        const startText = document.getElementById('btnStartGameText');
+        const lobbySub = document.getElementById('lobbySubtitle');
+
+        if (state.players.length >= 2) {
+          btnStart.disabled = false;
+          btnStart.className = 'w-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black text-base py-3.5 rounded-2xl shadow-xl shadow-emerald-500/30 transition flex items-center justify-center gap-2 cursor-pointer animate-pulse';
+          startText.innerText = `Iniciar Partida (${state.players.length} Jogadores Prontos)`;
+          lobbySub.innerText = 'Todos na mesa! Toque no botão para dar as cartas físicas e começar as apostas.';
+        } else {
+          btnStart.disabled = true;
+          btnStart.className = 'w-full bg-slate-800 text-slate-500 font-bold text-sm py-3 rounded-2xl flex items-center justify-center gap-2 cursor-not-allowed';
+          startText.innerText = 'Aguardando mais 1 jogador entrar...';
+          lobbySub.innerText = 'Compartilhe o código ou QR code da TV para seus amigos entrarem.';
+        }
+      } else {
+        lobbyCard.classList.add('hidden');
+      }
+
+      // 2. GERENCIAR GUIA DE CARTAS FÍSICAS (ASSISTENTE DE MESA)
+      if (state.state !== 'LOBBY' && state.state !== 'HAND_OVER') {
+        physicalCard.classList.remove('hidden');
+        updatePhysicalAssistant(state, me);
+      } else {
+        physicalCard.classList.add('hidden');
+      }
+
+      // 3. GERENCIAR MÃO ENCERRADA
+      if (state.state === 'HAND_OVER' && state.winners && state.winners.length > 0) {
+        handOverBanner.classList.remove('hidden');
+        const names = state.winners.map(w => `${w.name} (+${w.amount} fichas)`).join(', ');
+        document.getElementById('handOverWinnerText').innerText = `Vencedor: ${names}`;
+      } else {
+        handOverBanner.classList.add('hidden');
+      }
+
+      // 4. STATUS DE VEZ & CONTROLES DE APOSTA
+      const isMyTurn = (state.currentTurnPlayerId === myPlayerId) && !me.folded && !me.isAllIn && state.state !== 'LOBBY' && state.state !== 'SHOWDOWN' && state.state !== 'HAND_OVER';
       const controls = document.getElementById('actionControlsPanel');
       const waitingBox = document.getElementById('waitingTurnBox');
       const yourTurnBox = document.getElementById('yourTurnBox');
       const turnCard = document.getElementById('turnStatusCard');
       const waitingTimer = document.getElementById('waitingTimerBadge');
       const myTurnTimer = document.getElementById('myTurnCountdown');
+      const timerProgress = document.getElementById('turnTimerProgressBar');
 
       const rem = state.turnTimeRemaining !== undefined ? state.turnTimeRemaining : 30;
+      const progressPercent = Math.max(0, Math.min(100, (rem / 30) * 100));
 
       if (isMyTurn) {
         controls.classList.remove('opacity-40', 'pointer-events-none');
@@ -338,14 +502,20 @@
         turnCard.classList.add('border-emerald-500', 'bg-emerald-950/30');
 
         myTurnTimer.innerText = `${rem}s`;
+        timerProgress.style.width = `${progressPercent}%`;
+
         if (rem <= 5) {
           myTurnTimer.className = 'text-white font-mono bg-red-600 border border-red-400 px-2.5 py-0.5 rounded-xl text-sm animate-ping';
-          if (navigator.vibrate) navigator.vibrate(100);
+          timerProgress.className = 'bg-red-500 h-full transition-all duration-1000';
+          if (navigator.vibrate) navigator.vibrate(80);
+        } else if (rem <= 10) {
+          myTurnTimer.className = 'text-white font-mono bg-amber-600 border border-amber-400 px-2.5 py-0.5 rounded-xl text-sm';
+          timerProgress.className = 'bg-amber-400 h-full transition-all duration-1000';
         } else {
           myTurnTimer.className = 'text-white font-mono bg-emerald-950 border border-emerald-400/50 px-2.5 py-0.5 rounded-xl text-sm';
+          timerProgress.className = 'bg-emerald-400 h-full transition-all duration-1000';
         }
 
-        // Tocar som de vez
         if (!turnSoundPlayed) {
           SoundEffects.playYourTurn();
           if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
@@ -361,15 +531,19 @@
         turnCard.classList.remove('border-emerald-500', 'bg-emerald-950/30');
 
         const activePlayer = state.players.find(p => p.id === state.currentTurnPlayerId);
-        if (state.state === 'HAND_OVER' && state.winners && state.winners.length > 0) {
-          const names = state.winners.map(w => `${w.name} (+${w.amount})`).join(', ');
-          document.getElementById('waitingMessage').innerText = `🏆 Vencedor: ${names}`;
+        if (state.state === 'HAND_OVER') {
+          document.getElementById('waitingMessage').innerText = 'Mão encerrada. Aguardando próxima rodada...';
           waitingTimer.classList.add('hidden');
+        } else if (state.state === 'SHOWDOWN') {
+          document.getElementById('waitingMessage').innerText = 'Showdown! Decidam o vencedor das cartas físicas.';
+          waitingTimer.classList.add('hidden');
+          // Abre modal de showdown automaticamente no celular se estiver em showdown
+          openMobileShowdown();
         } else if (me.folded) {
-          document.getElementById('waitingMessage').innerText = 'Você deu Fold nesta mão.';
+          document.getElementById('waitingMessage').innerText = 'Você deu Fold. Aguardando o fim da mão...';
           waitingTimer.classList.add('hidden');
         } else if (me.isAllIn) {
-          document.getElementById('waitingMessage').innerText = 'Você está em ALL-IN!';
+          document.getElementById('waitingMessage').innerText = 'Você está em ALL-IN! Torça pelas cartas!';
           waitingTimer.classList.add('hidden');
         } else if (activePlayer) {
           document.getElementById('waitingMessage').innerText = `Vez de ${activePlayer.name}...`;
@@ -382,18 +556,62 @@
       }
     }
 
+    // Guia das cartas físicas
+    function updatePhysicalAssistant(state, me) {
+      const title = document.getElementById('physicalTitle');
+      const desc = document.getElementById('physicalDesc');
+      const dealer = state.players[state.dealerIndex] || { name: 'Dealer' };
+
+      if (state.state === 'PREFLOP') {
+        title.innerText = 'Pré-Flop (2 Cartas na Mão)';
+        if (me.isDealer) {
+          desc.innerText = '🃏 VOCÊ É O DEALER FÍSICO! Embaralhe e dê 2 cartas fechadas para cada jogador na mesa.';
+        } else {
+          desc.innerText = `Dealer ${dealer.name} está distribuindo 2 cartas físicas fechadas para cada um.`;
+        }
+      } else if (state.state === 'FLOP') {
+        title.innerText = 'Flop (3 Cartas Comunitárias)';
+        if (me.isDealer) {
+          desc.innerText = '🃏 DEALER: Queime 1 carta física e abra 3 cartas viradas para cima na mesa!';
+        } else {
+          desc.innerText = `Apostas pagas! Dealer ${dealer.name} deve abrir as 3 cartas do FLOP na mesa real.`;
+        }
+      } else if (state.state === 'TURN') {
+        title.innerText = 'Turn (4ª Carta na Mesa)';
+        if (me.isDealer) {
+          desc.innerText = '🃏 DEALER: Queime 1 carta física e abra a 4ª carta na mesa!';
+        } else {
+          desc.innerText = `Apostas pagas! Dealer ${dealer.name} deve abrir a 4ª carta (TURN) na mesa real.`;
+        }
+      } else if (state.state === 'RIVER') {
+        title.innerText = 'River (5ª e Última Carta)';
+        if (me.isDealer) {
+          desc.innerText = '🃏 DEALER: Queime 1 carta física e abra a 5ª e última carta na mesa!';
+        } else {
+          desc.innerText = `Apostas pagas! Dealer ${dealer.name} deve abrir a 5ª carta (RIVER) na mesa real.`;
+        }
+      } else if (state.state === 'SHOWDOWN') {
+        title.innerText = '🏆 SHOWDOWN (Hora da Verdade)';
+        desc.innerText = 'Abram suas cartas físicas na mesa! Comparem os jogos e toquem em Decidir Vencedor.';
+      }
+    }
+
+    // Atualiza botões e valores de aposta (Estilo Zynga)
     function updateActionButtons(me, state) {
       const callCost = state.currentMaxBet - me.currentBet;
       const btnCallText = document.getElementById('btnCallText');
       const btnCallSubText = document.getElementById('btnCallSubText');
+      const btnCall = document.getElementById('btnCall');
 
       if (callCost <= 0) {
         btnCallText.innerText = 'CHECK';
         btnCallSubText.innerText = 'Passar a vez';
+        btnCall.className = 'btn-action bg-emerald-600 hover:bg-emerald-500 text-white font-black text-base py-3.5 rounded-2xl shadow-lg shadow-emerald-950/40 flex flex-col items-center justify-center gap-0.5 border border-emerald-400';
       } else {
         const payAmount = Math.min(me.chips, callCost);
         btnCallText.innerText = `PAGAR ${payAmount}`;
-        btnCallSubText.innerText = payAmount >= me.chips ? 'ALL-IN' : `Igualar aposta`;
+        btnCallSubText.innerText = payAmount >= me.chips ? 'ALL-IN' : 'Igualar aposta';
+        btnCall.className = 'btn-action bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-base py-3.5 rounded-2xl shadow-lg shadow-amber-500/30 flex flex-col items-center justify-center gap-0.5 border border-amber-400';
       }
 
       // Slider de Aumento
@@ -404,7 +622,6 @@
       slider.min = Math.min(minRaiseTarget, maxAvailableBet);
       slider.max = maxAvailableBet;
 
-      // Ajusta target inicial se estiver fora da faixa
       if (targetBetAmount < slider.min) targetBetAmount = Number(slider.min);
       if (targetBetAmount > slider.max) targetBetAmount = Number(slider.max);
 
@@ -417,10 +634,30 @@
       updateBetDisplay(targetBetAmount, currentGameState && currentGameState.currentMaxBet > 0);
     }
 
+    function adjustBetStep(step) {
+      if (!currentGameState) return;
+      const me = currentGameState.players.find(p => p.id === myPlayerId);
+      if (!me) return;
+
+      const minRaiseTarget = currentGameState.currentMaxBet > 0 ? (currentGameState.currentMaxBet + currentGameState.minRaise) : currentGameState.bigBlind;
+      const maxAvailableBet = me.currentBet + me.chips;
+
+      targetBetAmount = Math.max(minRaiseTarget, Math.min(maxAvailableBet, targetBetAmount + step));
+      document.getElementById('betSlider').value = targetBetAmount;
+      updateBetDisplay(targetBetAmount, currentGameState.currentMaxBet > 0);
+    }
+
     function updateBetDisplay(val, isRaise) {
       document.getElementById('betDisplayValue').innerText = val;
-      const actionWord = isRaise ? 'Aumentar para' : 'Apostar';
-      document.getElementById('btnRaiseText').innerText = `${actionWord} ${val} Fichas`;
+      const me = currentGameState ? currentGameState.players.find(p => p.id === myPlayerId) : null;
+      const isAllIn = me && val >= (me.currentBet + me.chips);
+
+      if (isAllIn) {
+        document.getElementById('btnRaiseText').innerText = `ALL-IN (${val} Fichas)`;
+      } else {
+        const actionWord = isRaise ? 'Aumentar para' : 'Apostar';
+        document.getElementById('btnRaiseText').innerText = `${actionWord} ${val} Fichas`;
+      }
     }
 
     function setBetShortcut(type) {
@@ -433,6 +670,9 @@
 
       if (type === 'min') {
         targetBetAmount = Math.min(minRaiseTarget, maxBet);
+      } else if (type === '2x') {
+        const twoX = currentGameState.currentMaxBet > 0 ? currentGameState.currentMaxBet * 2 : currentGameState.bigBlind * 2;
+        targetBetAmount = Math.max(minRaiseTarget, Math.min(twoX, maxBet));
       } else if (type === 'half') {
         const halfPot = Math.floor(currentGameState.pot / 2);
         targetBetAmount = Math.max(minRaiseTarget, Math.min(halfPot, maxBet));
@@ -442,9 +682,27 @@
         targetBetAmount = maxBet;
       }
 
-      const slider = document.getElementById('betSlider');
-      slider.value = targetBetAmount;
+      document.getElementById('betSlider').value = targetBetAmount;
       updateBetDisplay(targetBetAmount, currentGameState.currentMaxBet > 0);
+    }
+
+    // Ações do Jogador
+    function handleFoldClick() {
+      if (!currentGameState) return;
+      const me = currentGameState.players.find(p => p.id === myPlayerId);
+      if (!me) return;
+
+      const callCost = currentGameState.currentMaxBet - me.currentBet;
+      if (callCost <= 0) {
+        // Proteção Zynga Poker: Alerta de Check grátis
+        document.getElementById('foldConfirmModal').classList.remove('hidden');
+      } else {
+        doAction('fold');
+      }
+    }
+
+    function closeFoldConfirm() {
+      document.getElementById('foldConfirmModal').classList.add('hidden');
     }
 
     function doAction(action, amount = 0) {
@@ -452,24 +710,21 @@
       else if (action === 'check') SoundEffects.playCheck();
       else SoundEffects.playChip();
 
+      // Dispara ação para o servidor
       if (socket && isSocketConnected) {
-        socket.emit('playerAction', {
-          roomId: currentRoomId,
-          action,
-          amount
+        socket.emit('playerAction', { roomId: currentRoomId, playerId: myPlayerId, action, amount });
+      } else {
+        fetch('/api/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roomId: currentRoomId, playerId: myPlayerId, action, amount })
+        }).then(res => res.json()).then(data => {
+          if (data.state) {
+            currentGameState = data.state;
+            renderMobileState(data.state);
+          }
         });
       }
-
-      fetch('/api/action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roomId: currentRoomId, playerId: myPlayerId, action, amount })
-      }).then(res => res.json()).then(data => {
-        if (data.state) {
-          currentGameState = data.state;
-          renderMobileState(data.state);
-        }
-      }).catch(e => console.error(e));
     }
 
     function doCallOrCheck() {
@@ -490,6 +745,24 @@
       doAction(isRaise ? 'raise' : 'bet', targetBetAmount);
     }
 
+    // Iniciar Mão / Próxima Mão do Celular
+    function triggerStartHand() {
+      SoundEffects.playChip();
+      if (socket && isSocketConnected) {
+        socket.emit('startHand', { roomId: currentRoomId });
+      }
+      fetch('/api/start-hand', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId: currentRoomId })
+      }).then(res => res.json()).then(data => {
+        if (data.state) {
+          currentGameState = data.state;
+          renderMobileState(data.state);
+        }
+      });
+    }
+
     function requestRebuy() {
       if (confirm('Deseja recarregar +100 fichas na mesa?')) {
         SoundEffects.playChip();
@@ -504,7 +777,71 @@
       }
     }
 
-    // Inicializar ícones Lucide
+    // Modal Showdown no Celular
+    function openMobileShowdown() {
+      if (!currentGameState || !currentGameState.players || currentGameState.players.length === 0) {
+        alert('Não há jogadores na mesa.');
+        return;
+      }
+      const modal = document.getElementById('mobileShowdownModal');
+      const list = document.getElementById('mobileShowdownPlayersList');
+      const notFolded = currentGameState.players.filter(p => !p.folded);
+      const playersToShow = notFolded.length > 0 ? notFolded : currentGameState.players;
+
+      list.innerHTML = playersToShow.map(p => `
+        <label class="flex items-center justify-between p-3 bg-slate-950 border border-slate-800 hover:border-amber-500/50 rounded-2xl cursor-pointer">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold" style="background-color: ${p.avatarColor || '#f59e0b'}">
+              ${p.name.substring(0,2).toUpperCase()}
+            </div>
+            <span class="font-bold text-white text-sm">${p.name} <span class="text-xs text-slate-400 font-normal">(${p.chips}f)</span></span>
+          </div>
+          <input type="checkbox" name="mobileShowdownWinner" value="${p.id}" class="w-5 h-5 rounded text-amber-500 accent-amber-500">
+        </label>
+      `).join('');
+
+      modal.classList.remove('hidden');
+    }
+
+    function closeMobileShowdown() {
+      document.getElementById('mobileShowdownModal').classList.add('hidden');
+    }
+
+    function confirmMobileShowdownWinners() {
+      const selected = Array.from(document.querySelectorAll('input[name="mobileShowdownWinner"]:checked')).map(el => el.value);
+      if (selected.length === 0) {
+        alert('Por favor, selecione quem ganhou a mão física.');
+        return;
+      }
+
+      SoundEffects.playWin();
+      if (socket && isSocketConnected) {
+        socket.emit('resolveShowdown', { roomId: currentRoomId, winnerIds: selected });
+      }
+      fetch('/api/showdown', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId: currentRoomId, winnerIds: selected })
+      }).then(res => res.json()).then(data => {
+        if (data.state) {
+          currentGameState = data.state;
+          renderMobileState(data.state);
+        }
+      });
+      closeMobileShowdown();
+    }
+
+    function copyRoomLink() {
+      const link = window.location.href;
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(link).then(() => {
+          alert('Link copiado! Envie no WhatsApp para seus amigos.');
+        });
+      } else {
+        prompt('Copie o link abaixo:', link);
+      }
+    }
+
     lucide.createIcons();
   </script>
 </body>

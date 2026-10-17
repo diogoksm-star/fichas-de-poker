@@ -287,14 +287,15 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('gameState', room.getState());
   });
 
-  socket.on('playerAction', async ({ roomId, action, amount }) => {
+  socket.on('playerAction', async ({ roomId, playerId, action, amount }) => {
     const room = await getOrCreateRoom(roomId);
     if (!room) return;
 
-    const player = room.players.find(p => p.id === currentPlayerId);
+    const targetId = playerId || currentPlayerId;
+    const player = room.players.find(p => p.id === targetId);
     const beforeChips = player ? player.chips : 0;
 
-    const result = room.playerAction(currentPlayerId, action, amount);
+    const result = room.playerAction(targetId, action, amount);
     if (!result.success) {
       socket.emit('actionError', { message: result.message });
       return;
