@@ -59,14 +59,18 @@
         </div>
       </div>
 
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-1.5">
         <!-- Botão Decidir Vencedor Sempre Acessível no Celular -->
         <button onclick="openMobileShowdown()" id="btnMobileWinnerTop" class="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-bold px-2.5 py-1.5 rounded-xl border border-amber-500/40 flex items-center gap-1 shadow">
           <i data-lucide="trophy" class="w-3.5 h-3.5"></i> Vencedor
         </button>
 
-        <button onclick="requestRebuy()" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-amber-400 text-xs font-bold px-2.5 py-1.5 rounded-xl border border-slate-700 flex items-center gap-1 shadow">
+        <button onclick="requestRebuy()" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-amber-400 text-xs font-bold px-2 py-1.5 rounded-xl border border-slate-700 flex items-center gap-1 shadow" title="Recarregar fichas">
           <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> +100
+        </button>
+
+        <button onclick="switchPlayer()" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-400 hover:text-red-400 text-xs px-2 py-1.5 rounded-xl border border-slate-700 flex items-center shadow" title="Trocar jogador / Sair">
+          <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
         </button>
       </div>
     </header>
@@ -139,23 +143,33 @@
 
     <!-- BANNER DE STATUS / VEZ DE JOGAR COM TIMER DINÂMICO -->
     <div id="turnStatusCard" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 text-center mb-2 shadow-md transition-all">
-      <div id="waitingTurnBox" class="flex items-center justify-center gap-2 text-slate-300 text-xs font-semibold py-1">
-        <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
-        <span id="waitingMessage">Aguardando início da mão...</span>
-        <span id="waitingTimerBadge" class="hidden text-amber-400 font-mono font-bold bg-slate-950 px-2 py-0.5 rounded-lg border border-slate-800 text-[11px]">30s</span>
+      <div id="waitingTurnBox" class="flex flex-col items-center justify-center gap-1 py-1">
+        <div class="flex items-center justify-center gap-2 text-slate-300 text-xs font-semibold">
+          <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+          <span id="waitingMessage" class="text-sm font-bold text-amber-300">Aguardando início da mão...</span>
+          <span id="waitingTimerBadge" class="hidden text-amber-400 font-mono font-bold bg-slate-950 px-2 py-0.5 rounded-lg border border-slate-800 text-[11px]">30s</span>
+        </div>
+        <p id="waitingSubMessage" class="text-[11px] text-slate-400">Aguarde sua vez para agir com suas fichas.</p>
       </div>
 
-      <div id="yourTurnBox" class="hidden flex flex-col items-center justify-center gap-1 py-1">
-        <div class="text-emerald-400 font-black text-base uppercase tracking-wider flex items-center gap-2">
-          <i data-lucide="bell-ring" class="w-5 h-5 animate-bounce"></i>
-          <span>SUA VEZ DE JOGAR!</span>
+      <div id="yourTurnBox" class="hidden flex flex-col items-center justify-center gap-1.5 py-1">
+        <div class="text-emerald-400 font-black text-lg uppercase tracking-wider flex items-center gap-2 animate-bounce">
+          <i data-lucide="bell-ring" class="w-6 h-6"></i>
+          <span id="yourTurnHeader">👉 É A SUA VEZ!</span>
           <span id="myTurnCountdown" class="text-white font-mono bg-emerald-950 border border-emerald-400/50 px-2.5 py-0.5 rounded-xl text-sm">30s</span>
         </div>
+        <p class="text-emerald-300 text-xs font-semibold">Escolha sua ação: FOLD, CHECK, CALL ou APOSTAR</p>
         <!-- Barra de Progresso do Timer -->
-        <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1">
+        <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden mt-1">
           <div id="turnTimerProgressBar" class="bg-emerald-400 h-full w-full transition-all duration-1000"></div>
         </div>
       </div>
+    </div>
+
+    <!-- AVISO DE AÇÕES BLOQUEADAS QUANDO NÃO É A SUA VEZ -->
+    <div id="lockedTurnOverlay" class="hidden text-center text-xs text-slate-400 font-semibold py-1.5 px-3 bg-slate-900/80 rounded-xl border border-slate-800 mb-1 flex items-center justify-center gap-1.5">
+      <i data-lucide="lock" class="w-3.5 h-3.5 text-slate-400"></i>
+      <span>Ações bloqueadas — aguarde a sua vez</span>
     </div>
 
     <!-- PAINEL DE AÇÕES DE POKER (ESTILO ZYNGA POKER PROFISSIONAL) -->
@@ -268,8 +282,12 @@
     const urlParams = new URLSearchParams(window.location.search);
     const initialRoom = (urlParams.get('room') || 'MESA-1').toUpperCase();
 
-    let myPlayerId = localStorage.getItem('poker_player_id');
-    let myPlayerName = localStorage.getItem('poker_player_name') || '';
+    function generatePlayerId() {
+      return 'p_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now().toString(36);
+    }
+
+    let myPlayerId = sessionStorage.getItem('poker_player_id');
+    let myPlayerName = sessionStorage.getItem('poker_player_name') || localStorage.getItem('poker_player_name') || '';
     let currentRoomId = initialRoom;
     let currentGameState = null;
     let targetBetAmount = 2;
@@ -292,8 +310,10 @@
         });
 
         socket.on('playerJoined', (data) => {
-          myPlayerId = data.playerId;
-          localStorage.setItem('poker_player_id', myPlayerId);
+          if (data.playerId && (!myPlayerId || data.player?.name === myPlayerName)) {
+            myPlayerId = data.playerId;
+            sessionStorage.setItem('poker_player_id', myPlayerId);
+          }
           updatePlayerInfo(data.player);
         });
 
@@ -328,6 +348,8 @@
     if (myPlayerName && myPlayerId) {
       document.getElementById('inputPlayerName').value = myPlayerName;
       autoJoin();
+    } else if (myPlayerName) {
+      document.getElementById('inputPlayerName').value = myPlayerName;
     }
 
     function autoJoin() {
@@ -355,11 +377,15 @@
         return;
       }
 
+      if (!myPlayerId || name !== myPlayerName) {
+        myPlayerId = generatePlayerId();
+      }
+
       myPlayerName = name;
       currentRoomId = room;
-      myPlayerId = myPlayerId || 'p_' + Math.random().toString(36).substring(2, 9);
 
-      localStorage.setItem('poker_player_id', myPlayerId);
+      sessionStorage.setItem('poker_player_id', myPlayerId);
+      sessionStorage.setItem('poker_player_name', myPlayerName);
       localStorage.setItem('poker_player_name', myPlayerName);
 
       document.getElementById('joinScreen').classList.add('hidden');
@@ -378,6 +404,17 @@
           renderMobileState(data.state);
         }
       });
+    }
+
+    function switchPlayer() {
+      if (confirm('Deseja sair da mesa ou trocar de jogador neste aparelho?')) {
+        sessionStorage.removeItem('poker_player_id');
+        sessionStorage.removeItem('poker_player_name');
+        myPlayerId = null;
+        myPlayerName = '';
+        document.getElementById('inputPlayerName').value = '';
+        document.getElementById('joinScreen').classList.remove('hidden');
+      }
     }
 
     function updatePlayerInfo(player) {
@@ -489,17 +526,22 @@
       const yourTurnBox = document.getElementById('yourTurnBox');
       const turnCard = document.getElementById('turnStatusCard');
       const waitingTimer = document.getElementById('waitingTimerBadge');
+      const waitingMsg = document.getElementById('waitingMessage');
+      const waitingSub = document.getElementById('waitingSubMessage');
       const myTurnTimer = document.getElementById('myTurnCountdown');
       const timerProgress = document.getElementById('turnTimerProgressBar');
+      const lockedOverlay = document.getElementById('lockedTurnOverlay');
 
       const rem = state.turnTimeRemaining !== undefined ? state.turnTimeRemaining : 30;
       const progressPercent = Math.max(0, Math.min(100, (rem / 30) * 100));
 
       if (isMyTurn) {
         controls.classList.remove('opacity-40', 'pointer-events-none');
+        if (lockedOverlay) lockedOverlay.classList.add('hidden');
         waitingBox.classList.add('hidden');
         yourTurnBox.classList.remove('hidden');
-        turnCard.classList.add('border-emerald-500', 'bg-emerald-950/30');
+        turnCard.className = 'bg-emerald-950/60 border-2 border-emerald-400 rounded-2xl p-3 text-center mb-2 shadow-lg shadow-emerald-500/20 transition-all';
+        document.getElementById('yourTurnHeader').innerText = `👉 É A SUA VEZ, ${me.name.toUpperCase()}!`;
 
         myTurnTimer.innerText = `${rem}s`;
         timerProgress.style.width = `${progressPercent}%`;
@@ -526,34 +568,41 @@
       } else {
         turnSoundPlayed = false;
         controls.classList.add('opacity-40', 'pointer-events-none');
+        if (lockedOverlay) lockedOverlay.classList.remove('hidden');
         waitingBox.classList.remove('hidden');
         yourTurnBox.classList.add('hidden');
-        turnCard.classList.remove('border-emerald-500', 'bg-emerald-950/30');
+        turnCard.className = 'bg-slate-900/90 border border-slate-800 rounded-2xl p-3 text-center mb-2 shadow-md transition-all';
 
         const activePlayer = state.players.find(p => p.id === state.currentTurnPlayerId);
         if (state.state === 'HAND_OVER') {
-          document.getElementById('waitingMessage').innerText = 'Mão encerrada. Aguardando próxima rodada...';
+          waitingMsg.innerText = '🏆 Mão encerrada!';
+          if (waitingSub) waitingSub.innerText = 'Toque em "Iniciar Próxima Mão" acima quando estiverem prontos.';
           waitingTimer.classList.add('hidden');
         } else if (state.state === 'SHOWDOWN') {
-          document.getElementById('waitingMessage').innerText = 'Showdown! Decidam o vencedor das cartas físicas.';
+          waitingMsg.innerText = '🏆 Showdown! Decidam o vencedor.';
+          if (waitingSub) waitingSub.innerText = 'Olhem as cartas físicas e toquem em "Vencedor" para entregar o pote.';
           waitingTimer.classList.add('hidden');
-          // Abre modal de showdown automaticamente no celular se estiver em showdown
           openMobileShowdown();
         } else if (me.folded) {
-          document.getElementById('waitingMessage').innerText = 'Você deu Fold. Aguardando o fim da mão...';
+          waitingMsg.innerText = 'Você deu Fold nesta mão';
+          if (waitingSub) waitingSub.innerText = 'Aguardando desfecho entre os outros jogadores...';
           waitingTimer.classList.add('hidden');
         } else if (me.isAllIn) {
-          document.getElementById('waitingMessage').innerText = 'Você está em ALL-IN! Torça pelas cartas!';
+          waitingMsg.innerText = '🔥 Você está em ALL-IN!';
+          if (waitingSub) waitingSub.innerText = 'Todas as suas fichas estão no pote! Torça pelas cartas na mesa.';
           waitingTimer.classList.add('hidden');
         } else if (activePlayer) {
-          document.getElementById('waitingMessage').innerText = `Vez de ${activePlayer.name}...`;
+          waitingMsg.innerHTML = `⏳ VEZ DE: <span class="text-amber-400 font-black text-sm uppercase">${activePlayer.name}</span>`;
+          if (waitingSub) waitingSub.innerText = `Aguarde ${activePlayer.name} fazer a aposta ou passar a vez...`;
           waitingTimer.innerText = `${rem}s`;
           waitingTimer.classList.remove('hidden');
         } else {
-          document.getElementById('waitingMessage').innerText = 'Aguardando próxima ação da mesa...';
+          waitingMsg.innerText = 'Aguardando próxima ação da mesa...';
+          if (waitingSub) waitingSub.innerText = '';
           waitingTimer.classList.add('hidden');
         }
       }
+      if (window.lucide) lucide.createIcons();
     }
 
     // Guia das cartas físicas

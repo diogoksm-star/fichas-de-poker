@@ -6,6 +6,8 @@ class PokerRoom {
     this.smallBlind = options.smallBlind || 1;
     this.bigBlind = options.bigBlind || 2;
     this.turnTimeLimit = options.turnTimeLimit !== undefined ? options.turnTimeLimit : 30; // Segundos por turno
+    this.autoActionOnTimeout = Boolean(options.autoActionOnTimeout); // false por padrão (jogadores humanos com cartas reais)
+    this.version = options.version || 1;
     
     this.players = []; // { id, name, socketId, chips, currentBet, totalHandBet, folded, isAllIn, isSittingOut, hasActed, isHost, avatarColor }
     this.state = 'LOBBY'; // LOBBY, PREFLOP, FLOP, TURN, RIVER, SHOWDOWN, HAND_OVER
@@ -33,6 +35,7 @@ class PokerRoom {
   }
 
   addPlayer(id, name, socketId, isHost = false) {
+    this.version = (this.version || 1) + 1;
     let player = this.players.find(p => p.id === id);
     if (player) {
       player.socketId = socketId || player.socketId;
@@ -148,6 +151,7 @@ class PokerRoom {
       return false;
     }
 
+    this.version = (this.version || 1) + 1;
     this.handNumber++;
     this.state = 'PREFLOP';
     this.pot = 0;
@@ -221,10 +225,15 @@ class PokerRoom {
     return true;
   }
 
-  // Timer de ação automático por inatividade
+  // Timer de ação (Aviso visual sem auto-fold surpresa)
   checkTimer() {
     if (this.state === 'LOBBY' || this.state === 'SHOWDOWN' || this.state === 'HAND_OVER') return false;
     if (this.currentTurnIndex === -1 || this.turnTimeLimit <= 0) return false;
+
+    // Se autoAction estiver desativado (padrão para jogo presencial de cartas físicas), não faz jogada fantasma
+    if (!this.autoActionOnTimeout) {
+      return false;
+    }
 
     const elapsedSeconds = (Date.now() - this.turnStartTime) / 1000;
     if (elapsedSeconds >= this.turnTimeLimit) {
@@ -234,10 +243,24 @@ class PokerRoom {
       const callCost = this.currentMaxBet - player.currentBet;
       const autoAction = callCost <= 0 ? 'check' : 'fold';
 
-      this.log(`⏱️ Tempo esgotado para ${player.name} (${this.turnTimeLimit}s)! Ação automática: ${autoAction.toUpperCase()}`);
+      this.log(`⏱️ Tempo esgotado para ${player.name} (${this.turnTimeLimit}s)! Ação: ${autoAction.toUpperCase()}`);
       return this.playerAction(player.id, autoAction);
     }
     return false;
+  }
+
+  // Pular vez de jogador ausente manualmente pelo Host
+  skipTurn() {
+    if (this.currentTurnIndex === -1 || this.state === 'LOBBY' || this.state === 'SHOWDOWN' || this.state === 'HAND_OVER') {
+      return false;
+    }
+    const player = this.players[this.currentTurnIndex];
+    if (!player) return false;
+
+    const callCost = this.currentMaxBet - player.currentBet;
+    const action = callCost <= 0 ? 'check' : 'fold';
+    this.log(`⏩ Vez de ${player.name} pulada pelo Host (${action.toUpperCase()}).`);
+    return this.playerAction(player.id, action);
   }
 
   playerAction(playerId, action, amount = 0) {
@@ -249,6 +272,7 @@ class PokerRoom {
       return { success: false, message: 'Não é a sua vez de jogar!' };
     }
 
+    this.version = (this.version || 1) + 1;
     amount = Number(amount) || 0;
     const callCost = this.currentMaxBet - player.currentBet;
 
@@ -419,6 +443,7 @@ class PokerRoom {
     const validStreets = ['PREFLOP', 'FLOP', 'TURN', 'RIVER', 'SHOWDOWN'];
     if (!validStreets.includes(streetName)) return false;
 
+    this.version = (this.version || 1) + 1;
     this.collectBetsIntoPot();
     this.state = streetName;
     this.log(`Fase alterada para: ${streetName}`);
@@ -443,6 +468,7 @@ class PokerRoom {
   }
 
   awardSingleWinner(winner) {
+    this.version = (this.version || 1) + 1;
     this.collectBetsIntoPot();
     winner.chips += this.pot;
     this.winners = [{ id: winner.id, name: winner.name, amount: this.pot }];
@@ -454,6 +480,7 @@ class PokerRoom {
 
   resolveShowdown(winnerIds) {
     if (!winnerIds || winnerIds.length === 0) return false;
+    this.version = (this.version || 1) + 1;
     this.collectBetsIntoPot();
 
     if (this.pot <= 0) return false;
@@ -531,6 +558,8 @@ class PokerRoom {
       bbIndex: this.bbIndex,
       currentTurnIndex: this.currentTurnIndex,
       currentTurnPlayerId: this.currentTurnIndex >= 0 && this.players[this.currentTurnIndex] ? this.players[this.currentTurnIndex].id : null,
+      currentTurnPlayerName: this.currentTurnIndex >= 0 && this.players[this.currentTurnIndex] ? this.players[this.currentTurnIndex].name : null,
+      version: this.version || 1,
       players: this.players.map((p, idx) => ({
         id: p.id,
         name: p.name,
@@ -560,6 +589,8 @@ class PokerRoom {
       smallBlind: this.smallBlind,
       bigBlind: this.bigBlind,
       turnTimeLimit: this.turnTimeLimit,
+      autoActionOnTimeout: this.autoActionOnTimeout,
+      version: this.version || 1,
       players: this.players,
       state: this.state,
       pot: this.pot,
@@ -582,8 +613,10 @@ class PokerRoom {
       startingChips: data.startingChips,
       smallBlind: data.smallBlind,
       bigBlind: data.bigBlind,
-      turnTimeLimit: data.turnTimeLimit
+      turnTimeLimit: data.turnTimeLimit,
+      autoActionOnTimeout: data.autoActionOnTimeout
     });
+    room.version = data.version || 1;
     room.players = data.players || [];
     room.state = data.state || 'LOBBY';
     room.pot = data.pot || 0;

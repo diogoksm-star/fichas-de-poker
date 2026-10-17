@@ -42,20 +42,28 @@ const rooms = new Map();
 
 async function getOrCreateRoom(roomId = 'MESA-1') {
   roomId = roomId.toUpperCase().trim();
-  if (rooms.has(roomId)) {
-    return rooms.get(roomId);
-  }
-  
-  // Tentar restaurar do banco de dados (fundamental para Vercel Serverless)
+  const memoryRoom = rooms.get(roomId);
+
+  // Sempre sincroniza com o banco de dados compartilhado (Neon PostgreSQL / Serverless)
   try {
     const saved = await db.loadRoomState(roomId);
     if (saved) {
-      const restored = PokerRoom.fromJSON(saved);
-      rooms.set(roomId, restored);
-      return restored;
+      const savedVersion = saved.version || 0;
+      const memVersion = memoryRoom ? (memoryRoom.version || 0) : -1;
+
+      // Se o banco tiver uma versão igual ou mais nova, restaura o estado canônico
+      if (savedVersion >= memVersion) {
+        const restored = PokerRoom.fromJSON(saved);
+        rooms.set(roomId, restored);
+        return restored;
+      }
     }
   } catch (e) {
-    console.error('Erro carregando estado salvo:', e);
+    console.error('Erro carregando estado do banco:', e);
+  }
+
+  if (memoryRoom) {
+    return memoryRoom;
   }
 
   const room = new PokerRoom(roomId);
@@ -244,6 +252,19 @@ app.post('/api/advance', async (req, res) => {
   res.json({ success: ok, state: room.getState() });
 });
 
+// REST Fallback: Pular Turno Manualmente (Host)
+app.post('/api/skip-turn', async (req, res) => {
+  const { roomId = 'MESA-1' } = req.body;
+  const room = await getOrCreateRoom(roomId);
+
+  const ok = room.skipTurn();
+  if (ok) {
+    await db.saveRoomState(room.roomId, room.toJSON());
+    io.to(room.roomId).emit('gameState', room.getState());
+  }
+  res.json({ success: ok, state: room.getState() });
+});
+
 // REST Fallback: Resetar Mão
 app.post('/api/reset-hand', async (req, res) => {
   const { roomId = 'MESA-1' } = req.body;
@@ -372,6 +393,16 @@ io.on('connection', (socket) => {
     if (!room) return;
 
     if (room.forceAdvance()) {
+      await db.saveRoomState(room.roomId, room.toJSON());
+      io.to(room.roomId).emit('gameState', room.getState());
+    }
+  });
+
+  socket.on('skipTurn', async ({ roomId }) => {
+    const room = await getOrCreateRoom(roomId);
+    if (!room) return;
+
+    if (room.skipTurn()) {
       await db.saveRoomState(room.roomId, room.toJSON());
       io.to(room.roomId).emit('gameState', room.getState());
     }
