@@ -51,15 +51,22 @@ function getOrCreateRoom(roomId = 'MESA-1') {
 
 // Endpoint para obter dados de rede e QR Code para a TV
 app.get('/api/info', async (req, res) => {
-  const host = process.env.PUBLIC_URL || getLocalIpAddress();
+  const reqHost = req.headers['x-forwarded-host'] || req.headers.host;
+  const isVercel = reqHost && reqHost.includes('vercel.app');
+  const protocol = req.headers['x-forwarded-proto'] || (req.secure || isVercel ? 'https' : 'http');
   const roomId = (req.query.room || 'MESA-1').toUpperCase();
-  const isHttps = process.env.NODE_ENV === 'production' || process.env.PUBLIC_URL?.startsWith('https');
-  const protocol = isHttps ? 'https' : 'http';
-  const portPart = (process.env.PUBLIC_URL || PORT == 80 || PORT == 443) ? '' : `:${PORT}`;
-  
-  const clientUrl = process.env.PUBLIC_URL 
-    ? `${process.env.PUBLIC_URL}/play.html?room=${roomId}`
-    : `${protocol}://${host}${portPart}/play.html?room=${roomId}`;
+
+  let clientUrl = '';
+  let hostDisplay = '';
+
+  if (isVercel || (reqHost && !reqHost.includes('localhost') && !reqHost.startsWith('127.') && !reqHost.startsWith('169.254.'))) {
+    clientUrl = `${protocol}://${reqHost}/play.html?room=${roomId}`;
+    hostDisplay = reqHost;
+  } else {
+    const localIp = getLocalIpAddress();
+    hostDisplay = localIp;
+    clientUrl = `http://${localIp}:${PORT}/play.html?room=${roomId}`;
+  }
   
   try {
     const qrCodeDataUrl = await QRCode.toDataURL(clientUrl, {
