@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Minhas Fichas - Poker Mobile</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Socket.io -->
+  <script src="/socket.io/socket.io.js"></script>
+  <!-- Som e Estilos -->
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/sound.js"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between p-3 select-none">
+
+  <!-- TELA 1: ENTRAR NA MESA (SE NÃO TIVER NOME SALVO) -->
+  <div id="joinScreen" class="fixed inset-0 bg-slate-950 z-50 flex flex-col items-center justify-center p-6">
+    <div class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl text-center">
+      <div class="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-400 mx-auto flex items-center justify-center text-3xl font-black mb-4 border border-amber-500/30">
+        ♠
+      </div>
+      <h1 class="text-2xl font-black text-white">Fichas de Poker</h1>
+      <p class="text-slate-400 text-xs mt-1 mb-6">Suas fichas virtuais para jogar com o baralho físico na mesa.</p>
+
+      <div class="space-y-4 text-left">
+        <div>
+          <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Seu Nome / Apelido:</label>
+          <input type="text" id="inputPlayerName" placeholder="Ex: Diogo" maxlength="15" autofocus
+            class="w-full bg-slate-950 border border-slate-700 rounded-2xl px-4 py-3.5 text-white font-bold text-lg focus:outline-none focus:border-amber-500 transition">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Código da Mesa:</label>
+          <input type="text" id="inputRoomId" value="MESA-1" uppercase
+            class="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-2.5 text-amber-400 font-mono font-bold text-base focus:outline-none focus:border-amber-500 transition">
+        </div>
+
+        <button onclick="handleJoin()" class="w-full bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-black text-lg py-4 rounded-2xl shadow-lg shadow-amber-500/30 transition mt-2">
+          Entrar no Jogo
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TELA 2: INTERFACE DO JOGADOR NO CELULAR -->
+  <div id="gameScreen" class="flex-1 flex flex-col justify-between max-w-md mx-auto w-full">
+    
+    <!-- TOPO: Identificação e Rebuy -->
+    <header class="flex items-center justify-between bg-slate-900/90 border border-slate-800/80 rounded-2xl px-4 py-2.5 shadow-md">
+      <div class="flex items-center gap-2.5">
+        <div id="myAvatar" class="w-8 h-8 rounded-full bg-amber-500 text-slate-950 font-black text-xs flex items-center justify-center">
+          P
+        </div>
+        <div>
+          <h2 id="myNameDisplay" class="font-bold text-sm text-white leading-tight">Jogador</h2>
+          <span id="myRoleBadge" class="text-[10px] text-slate-400">Na mesa</span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button onclick="requestRebuy()" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-amber-400 text-xs font-bold px-3 py-1.5 rounded-xl border border-slate-700 flex items-center gap-1 shadow">
+          <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> +100 Fichas
+        </button>
+      </div>
+    </header>
+
+    <!-- CARTEIRA DE FICHAS (DESTAQUE PRINCIPAL) -->
+    <div class="my-3 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border-2 border-amber-500/40 rounded-3xl p-5 shadow-2xl relative overflow-hidden">
+      <div class="absolute -right-4 -bottom-4 w-28 h-28 bg-amber-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+      <div class="flex items-center justify-between text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">
+        <span>Suas Fichas Disponíveis</span>
+        <span class="chip-token chip-gold scale-90">♦</span>
+      </div>
+
+      <div class="flex items-baseline gap-2">
+        <span id="myChipsDisplay" class="text-5xl font-black text-amber-400 drop-shadow-[0_2px_12px_rgba(251,191,36,0.4)]">
+          100
+        </span>
+        <span class="text-sm font-bold text-amber-500 uppercase">fichas</span>
+      </div>
+
+      <!-- Resumo rápido da rodada -->
+      <div class="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-300">
+        <div>
+          <span class="text-slate-400">Sua aposta na mão:</span>
+          <span id="myCurrentBetDisplay" class="font-bold text-white ml-1">0</span>
+        </div>
+        <div>
+          <span class="text-slate-400">Pote da Mesa:</span>
+          <span id="tablePotDisplay" class="font-bold text-amber-400 ml-1">0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- BANNER DE STATUS / VEZ DE JOGAR -->
+    <div id="turnStatusCard" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 text-center mb-3 shadow-md transition-all">
+      <div id="waitingTurnBox" class="flex items-center justify-center gap-2 text-slate-300 text-xs font-semibold py-1">
+        <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+        <span id="waitingMessage">Aguardando início da mão...</span>
+      </div>
+
+      <div id="yourTurnBox" class="hidden py-1 text-emerald-400 font-black text-base uppercase tracking-wider flex items-center justify-center gap-2 animate-bounce">
+        <i data-lucide="bell-ring" class="w-5 h-5"></i> É A SUA VEZ DE JOGAR!
+      </div>
+    </div>
+
+    <!-- PAINEL DE AÇÕES DE POKER -->
+    <div id="actionControlsPanel" class="space-y-2 opacity-40 pointer-events-none transition-all duration-200">
+
+      <!-- FOLD e CHECK/CALL lado a lado -->
+      <div class="grid grid-cols-2 gap-2.5">
+        <button id="btnFold" onclick="doAction('fold')" class="btn-action bg-red-600/90 hover:bg-red-500 text-white font-extrabold text-base py-4 rounded-2xl shadow-lg shadow-red-950/40 flex flex-col items-center justify-center gap-0.5 border border-red-500/50">
+          <span>FOLD</span>
+          <span class="text-[10px] font-medium opacity-80">Desistir da Mão</span>
+        </button>
+
+        <button id="btnCall" onclick="doCallOrCheck()" class="btn-action bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-base py-4 rounded-2xl shadow-lg shadow-amber-500/30 flex flex-col items-center justify-center gap-0.5 border border-amber-400">
+          <span id="btnCallText">CHECK</span>
+          <span id="btnCallSubText" class="text-[10px] font-bold opacity-90">Passar a vez</span>
+        </button>
+      </div>
+
+      <!-- BOTÃO E GAVETA DE APOSTA / RAISE -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3">
+        <!-- Atalhos rápidos de valor -->
+        <div class="grid grid-cols-4 gap-1.5 mb-2.5 text-xs font-bold">
+          <button onclick="setBetShortcut('min')" class="bg-slate-800 hover:bg-slate-700 py-1.5 rounded-lg text-slate-200 border border-slate-700 active:scale-95">Mínimo</button>
+          <button onclick="setBetShortcut('half')" class="bg-slate-800 hover:bg-slate-700 py-1.5 rounded-lg text-slate-200 border border-slate-700 active:scale-95">½ Pote</button>
+          <button onclick="setBetShortcut('pot')" class="bg-slate-800 hover:bg-slate-700 py-1.5 rounded-lg text-slate-200 border border-slate-700 active:scale-95">Pote</button>
+          <button onclick="setBetShortcut('allin')" class="bg-red-950/80 hover:bg-red-900 py-1.5 rounded-lg text-red-300 border border-red-700 active:scale-95">All-In</button>
+        </div>
+
+        <!-- Slider e Input de Apostas -->
+        <div class="flex items-center gap-3 mb-2.5">
+          <input type="range" id="betSlider" min="2" max="100" value="2" oninput="onSliderChange(this.value)" class="flex-1 accent-emerald-500 h-2 bg-slate-950 rounded-lg cursor-pointer">
+          <div class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-1 flex items-center min-w-[70px] justify-center">
+            <span id="betDisplayValue" class="text-emerald-400 font-extrabold text-lg">2</span>
+          </div>
+        </div>
+
+        <button id="btnRaise" onclick="doRaise()" class="btn-action w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black text-base py-3.5 rounded-xl shadow-lg shadow-emerald-900/40 flex items-center justify-center gap-2 border border-emerald-400/50">
+          <i data-lucide="arrow-up-circle" class="w-5 h-5"></i>
+          <span id="btnRaiseText">Apostar 2 Fichas</span>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- RODAPÉ: Status da Conexão e Outros Jogadores -->
+    <footer class="mt-3 text-center text-[11px] text-slate-500 flex items-center justify-between px-2">
+      <span id="playerConnectionText">Conectado na MESA-1</span>
+      <span id="streetIndicator" class="text-slate-400 font-semibold">Street: Aguardando</span>
+    </footer>
+
+  </div>
+
+  <script>
+    const socket = io();
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialRoom = (urlParams.get('room') || 'MESA-1').toUpperCase();
+
+    let myPlayerId = localStorage.getItem('poker_player_id');
+    let myPlayerName = localStorage.getItem('poker_player_name') || '';
+    let currentRoomId = initialRoom;
+    let currentGameState = null;
+    let targetBetAmount = 2;
+
+    // Configura sala no input
+    document.getElementById('inputRoomId').value = currentRoomId;
+
+    if (myPlayerName && myPlayerId) {
+      document.getElementById('inputPlayerName').value = myPlayerName;
+      autoJoin();
+    }
+
+    function autoJoin() {
+      document.getElementById('joinScreen').classList.add('hidden');
+      socket.emit('joinRoom', {
+        roomId: currentRoomId,
+        name: myPlayerName,
+        playerId: myPlayerId
+      });
+    }
+
+    function handleJoin() {
+      const name = document.getElementById('inputPlayerName').value.trim();
+      const room = document.getElementById('inputRoomId').value.trim().toUpperCase() || 'MESA-1';
+      if (!name) {
+        alert('Por favor, digite seu nome!');
+        return;
+      }
+
+      myPlayerName = name;
+      currentRoomId = room;
+      myPlayerId = myPlayerId || 'p_' + Math.random().toString(36).substring(2, 9);
+
+      localStorage.setItem('poker_player_id', myPlayerId);
+      localStorage.setItem('poker_player_name', myPlayerName);
+
+      document.getElementById('joinScreen').classList.add('hidden');
+      socket.emit('joinRoom', {
+        roomId: currentRoomId,
+        name: myPlayerName,
+        playerId: myPlayerId
+      });
+    }
+
+    socket.on('playerJoined', (data) => {
+      myPlayerId = data.playerId;
+      localStorage.setItem('poker_player_id', myPlayerId);
+      updatePlayerInfo(data.player);
+    });
+
+    socket.on('gameState', (state) => {
+      currentGameState = state;
+      renderMobileState(state);
+    });
+
+    socket.on('actionError', (err) => {
+      alert(err.message);
+    });
+
+    function updatePlayerInfo(player) {
+      if (!player) return;
+      document.getElementById('myNameDisplay').innerText = player.name;
+      document.getElementById('myAvatar').innerText = player.name.substring(0, 2).toUpperCase();
+      document.getElementById('myAvatar').style.backgroundColor = player.avatarColor || '#f59e0b';
+    }
+
+    function renderMobileState(state) {
+      const me = state.players.find(p => p.id === myPlayerId);
+      if (!me) return;
+
+      updatePlayerInfo(me);
+
+      // Fichas e Pote
+      document.getElementById('myChipsDisplay').innerText = me.chips;
+      document.getElementById('myCurrentBetDisplay').innerText = me.currentBet;
+      document.getElementById('tablePotDisplay').innerText = state.pot;
+      document.getElementById('streetIndicator').innerText = `Fase: ${state.state}`;
+      document.getElementById('playerConnectionText').innerText = `Mesa: ${state.roomId}`;
+
+      // Papel (Dealer, SB, BB)
+      const roleBadge = document.getElementById('myRoleBadge');
+      if (me.isDealer) roleBadge.innerText = 'Botão / Dealer (D)';
+      else if (me.isSmallBlind) roleBadge.innerText = 'Small Blind (SB)';
+      else if (me.isBigBlind) roleBadge.innerText = 'Big Blind (BB)';
+      else roleBadge.innerText = 'Jogador';
+
+      // Status de Vez
+      const isMyTurn = (state.currentTurnPlayerId === myPlayerId) && !me.folded && !me.isAllIn && state.state !== 'SHOWDOWN' && state.state !== 'HAND_OVER';
+      const controls = document.getElementById('actionControlsPanel');
+      const waitingBox = document.getElementById('waitingTurnBox');
+      const yourTurnBox = document.getElementById('yourTurnBox');
+      const turnCard = document.getElementById('turnStatusCard');
+
+      if (isMyTurn) {
+        controls.classList.remove('opacity-40', 'pointer-events-none');
+        waitingBox.classList.add('hidden');
+        yourTurnBox.classList.remove('hidden');
+        turnCard.classList.add('border-emerald-500', 'bg-emerald-950/30');
+
+        // Vibrar celular e tocar som
+        if (navigator.vibrate) {
+          navigator.vibrate([100, 50, 100]);
+        }
+        SoundEffects.playYourTurn();
+
+        updateActionButtons(me, state);
+      } else {
+        controls.classList.add('opacity-40', 'pointer-events-none');
+        waitingBox.classList.remove('hidden');
+        yourTurnBox.classList.add('hidden');
+        turnCard.classList.remove('border-emerald-500', 'bg-emerald-950/30');
+
+        const activePlayer = state.players.find(p => p.id === state.currentTurnPlayerId);
+        if (me.folded) {
+          document.getElementById('waitingMessage').innerText = 'Você deu Fold nesta mão.';
+        } else if (me.isAllIn) {
+          document.getElementById('waitingMessage').innerText = 'Você está em ALL-IN!';
+        } else if (activePlayer) {
+          document.getElementById('waitingMessage').innerText = `Vez de ${activePlayer.name} apostar...`;
+        } else {
+          document.getElementById('waitingMessage').innerText = 'Aguardando próxima ação da mesa...';
+        }
+      }
+    }
+
+    function updateActionButtons(me, state) {
+      const callCost = state.currentMaxBet - me.currentBet;
+      const btnCallText = document.getElementById('btnCallText');
+      const btnCallSubText = document.getElementById('btnCallSubText');
+
+      if (callCost <= 0) {
+        btnCallText.innerText = 'CHECK';
+        btnCallSubText.innerText = 'Passar a vez';
+      } else {
+        const payAmount = Math.min(me.chips, callCost);
+        btnCallText.innerText = `PAGAR ${payAmount}`;
+        btnCallSubText.innerText = payAmount >= me.chips ? 'ALL-IN' : `Igualar aposta`;
+      }
+
+      // Slider de Aumento
+      const minRaiseTarget = state.currentMaxBet > 0 ? (state.currentMaxBet + state.minRaise) : state.bigBlind;
+      const maxAvailableBet = me.currentBet + me.chips;
+
+      const slider = document.getElementById('betSlider');
+      slider.min = Math.min(minRaiseTarget, maxAvailableBet);
+      slider.max = maxAvailableBet;
+
+      // Ajusta target inicial se estiver fora da faixa
+      if (targetBetAmount < slider.min) targetBetAmount = Number(slider.min);
+      if (targetBetAmount > slider.max) targetBetAmount = Number(slider.max);
+
+      slider.value = targetBetAmount;
+      updateBetDisplay(targetBetAmount, state.currentMaxBet > 0);
+    }
+
+    function onSliderChange(val) {
+      targetBetAmount = Number(val);
+      updateBetDisplay(targetBetAmount, currentGameState && currentGameState.currentMaxBet > 0);
+    }
+
+    function updateBetDisplay(val, isRaise) {
+      document.getElementById('betDisplayValue').innerText = val;
+      const actionWord = isRaise ? 'Aumentar para' : 'Apostar';
+      document.getElementById('btnRaiseText').innerText = `${actionWord} ${val} Fichas`;
+    }
+
+    function setBetShortcut(type) {
+      if (!currentGameState) return;
+      const me = currentGameState.players.find(p => p.id === myPlayerId);
+      if (!me) return;
+
+      const maxBet = me.currentBet + me.chips;
+      const minRaiseTarget = currentGameState.currentMaxBet > 0 ? (currentGameState.currentMaxBet + currentGameState.minRaise) : currentGameState.bigBlind;
+
+      if (type === 'min') {
+        targetBetAmount = Math.min(minRaiseTarget, maxBet);
+      } else if (type === 'half') {
+        const halfPot = Math.floor(currentGameState.pot / 2);
+        targetBetAmount = Math.max(minRaiseTarget, Math.min(halfPot, maxBet));
+      } else if (type === 'pot') {
+        targetBetAmount = Math.max(minRaiseTarget, Math.min(currentGameState.pot, maxBet));
+      } else if (type === 'allin') {
+        targetBetAmount = maxBet;
+      }
+
+      const slider = document.getElementById('betSlider');
+      slider.value = targetBetAmount;
+      updateBetDisplay(targetBetAmount, currentGameState.currentMaxBet > 0);
+    }
+
+    function doAction(action, amount = 0) {
+      if (action === 'fold') SoundEffects.playFold();
+      else if (action === 'check') SoundEffects.playCheck();
+      else SoundEffects.playChip();
+
+      socket.emit('playerAction', {
+        roomId: currentRoomId,
+        action,
+        amount
+      });
+    }
+
+    function doCallOrCheck() {
+      if (!currentGameState) return;
+      const me = currentGameState.players.find(p => p.id === myPlayerId);
+      if (!me) return;
+
+      const callCost = currentGameState.currentMaxBet - me.currentBet;
+      if (callCost <= 0) {
+        doAction('check');
+      } else {
+        doAction('call');
+      }
+    }
+
+    function doRaise() {
+      const isRaise = currentGameState && currentGameState.currentMaxBet > 0;
+      doAction(isRaise ? 'raise' : 'bet', targetBetAmount);
+    }
+
+    function requestRebuy() {
+      if (confirm('Deseja recarregar +100 fichas na mesa?')) {
+        SoundEffects.playChip();
+        socket.emit('rebuy', { roomId: currentRoomId, playerId: myPlayerId, amount: 100 });
+      }
+    }
+
+    // Inicializar ícones Lucide
+    lucide.createIcons();
+  </script>
+</body>
+</html>
